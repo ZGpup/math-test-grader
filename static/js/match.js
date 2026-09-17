@@ -34,6 +34,10 @@ function render() {
   const subs = M.submissions;
   const matched = subs.filter((s) => s.student_id).length;
   $('#status').textContent = `Matched ${matched}/${subs.length}`;
+  // The way back, highlighted once there is nothing left to match.
+  const complete = subs.length > 0 && matched === subs.length;
+  $('#done').classList.toggle('primary', complete);
+  $('#done').textContent = complete ? 'Done' : 'Back to assignment';
   const diff = subs.length - M.students.length;
   $('#warning').replaceChildren(diff === 0 ? '' : h('span', { class: 'warning' },
     diff < 0
@@ -134,6 +138,7 @@ document.addEventListener('keydown', (e) => {
 async function load() {
   M = await GET(`/api/assignments/${assignmentId}/submissions`);
   header(assignmentCrumbs(M, 'Match names'));
+  $('#done').href = `assignment.html?id=${M.id}`;
   const requested = M.submissions.findIndex((s) => String(s.id) === param('sub'));
   const firstUnmatched = M.submissions.findIndex((s) => !s.student_id);
   if (M.submissions.length) show(requested >= 0 ? requested : Math.max(0, firstUnmatched));
