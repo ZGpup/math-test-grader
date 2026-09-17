@@ -282,5 +282,7 @@ table.results tr.absent td, table.results tr.unmatched td { color: var(--muted);
 }
 .modal { background: var(--bg); border: 1px solid var(--border); padding: 16px 18px; min-width: 320px; max-width: 90vw; }
 .modal .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.modal > .warning { display: block; max-width: 480px; padding: 8px 12px; }
+.typed-confirm { display: grid; gap: 4px; margin-top: 14px; }
 .modal.image { padding: 0; max-height: 94vh; overflow: auto; }
 .modal.image img { display: block; max-width: 90vw; width: 850px; }

@@ -83,4 +83,5 @@ Results and export
 
 UI
 - One HTML page per screen, no framework. Confirmations use in-page square modals, not browser dialogs, to keep the no-rounded-corners rule.
+- Deleting an assignment takes two steps: the normal confirmation, then a warning listing what will be lost, where you must type `yes`.
 - The server binds to 127.0.0.1 only and has no authentication.

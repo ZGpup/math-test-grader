@@ -193,6 +193,28 @@ function confirmBox(message, okLabel = 'Delete') {
   });
 }
 
+// Resolves true only after the user types `word` (case-insensitive) and confirms.
+function typedConfirmBox(message, word = 'yes', okLabel = 'Delete') {
+  return new Promise((resolve) => {
+    const input = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false' });
+    const ok = h('button', { class: 'primary', disabled: true }, okLabel);
+    const cancel = h('button', {}, 'Cancel');
+    const matches = () => input.value.trim().toLowerCase() === word;
+    const { backdrop, close } = openModal([
+      h('div', { class: 'warning' }, message),
+      h('label', { class: 'typed-confirm' }, `Type “${word}” to confirm`, input),
+      h('div', { class: 'buttons' }, cancel, ok),
+    ]);
+    const finish = (value) => { close(); resolve(value); };
+    backdrop.addEventListener('dismiss', () => resolve(false));
+    input.addEventListener('input', () => { ok.disabled = !matches(); });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && matches()) finish(true); });
+    ok.addEventListener('click', () => { if (matches()) finish(true); });
+    cancel.addEventListener('click', () => finish(false));
+    input.focus();
+  });
+}
+
 function showImage(src) {
   openModal(h('img', { src, alt: '' }), 'image');
 }

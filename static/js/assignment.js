@@ -273,6 +273,14 @@ $('#name').addEventListener('change', async (e) => {
 
 $('#delete').addEventListener('click', async () => {
   if (!await confirmBox('Delete this assignment, its scans, comments and grades?')) return;
+  const p = A.progress;
+  const comments = A.problems.reduce((n, problem) => n + problem.comments, 0);
+  const ok = await typedConfirmBox(
+    `Warning: all work on ${A.name} will be lost, including ` +
+    `${plural(A.batches.length, 'scan file', 'scan files')}, ${plural(p.submissions, 'test', 'tests')}, ` +
+    `${plural(p.matched, 'name match', 'name matches')}, ${plural(p.graded, 'graded problem', 'graded problems')} ` +
+    `and ${plural(comments, 'comment', 'comments')}. This cannot be undone. Are you sure?`);
+  if (!ok) return;
   await DELETE(`/api/assignments/${assignmentId}`);
   location.href = `course.html?id=${A.course.id}`;
 });
