@@ -88,14 +88,22 @@ $('#blank-file').addEventListener('change', async (e) => {
 
 // ------------------------------------------------------------------ scans
 
+// Pages per test belongs to the scan as a whole, so only the very first PDF asks for it.
+// Every later PDF carries on from the last page of the one before.
+function startsTheScan(i) {
+  return !A.batches.length && i === 0;
+}
+
 function renderPending() {
   if (!pending.length) return $('#pending').replaceChildren();
   const rows = pending.map((item, i) => h('tr', {},
     h('td', {}, item.file.name),
-    h('td', {}, h('input', {
-      type: 'number', min: '1', value: String(item.ppt), disabled: uploading,
-      oninput: (e) => { item.ppt = parseInt(e.target.value, 10); },
-    })),
+    h('td', {}, startsTheScan(i)
+      ? h('input', {
+        type: 'number', min: '1', value: String(item.ppt), disabled: uploading,
+        oninput: (e) => { item.ppt = parseInt(e.target.value, 10); },
+      })
+      : h('span', { class: 'muted' }, 'continues the scan')),
     h('td', {}, h('button', {
       class: 'link', disabled: uploading, onclick: () => { pending.splice(i, 1); renderPending(); },
     }, 'Remove'))));
@@ -119,7 +127,7 @@ async function uploadPending() {
       $('#scan-status').textContent = `Uploading ${done + 1}/${total}`;
       const form = new FormData();
       form.append('file', item.file);
-      if (item.ppt >= 1) form.append('pages_per_test', String(item.ppt));
+      if (startsTheScan(0) && item.ppt >= 1) form.append('pages_per_test', String(item.ppt));
       A = await POST(`/api/assignments/${assignmentId}/batches`, form);
       pending.shift();
       done++;
@@ -140,6 +148,7 @@ $('#scan-files').addEventListener('change', (e) => {
 
 function renderBatches() {
   const ready = A.blank_pages > 0;
+  $('#scan-button').firstChild.textContent = A.batches.length ? 'Add more pages' : 'Add PDFs';
   $('#scan-button').classList.toggle('disabled', !ready);
   $('#scan-files').disabled = !ready;
   if (!ready) $('#scan-status').textContent = 'Upload the blank test first';
@@ -157,7 +166,7 @@ function batchBlock(b) {
       h('label', {}, 'Pages per test ', ppt),
       h('span', {}, plural(b.tests, 'test', 'tests')),
       b.leftover ? h('span', { class: 'warning' },
-        `${b.page_count} pages is not divisible by ${b.pages_per_test}: ${plural(b.leftover, 'leftover page', 'leftover pages')} ignored`) : null,
+        `${plural(b.leftover, 'page', 'pages')} past the last full test: the next PDF you add carries on from there`) : null,
       h('span', { class: 'spacer' }),
       h('button', { onclick: () => deleteBatch(b) }, 'Delete')),
     h('div', { class: 'row', style: 'margin-top: 6px' },

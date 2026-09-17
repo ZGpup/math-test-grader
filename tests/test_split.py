@@ -1,3 +1,5 @@
+import pymupdf
+
 from app import db, pdf
 from conftest import upload
 
@@ -59,46 +61,106 @@ def test_roster_edit_keeps_student_ids(client):
     assert [s["id"] for s in after] == [before[0]["id"]]
 
 
-def test_upload_batches_split_and_map(client, fixtures):
+def new_assignment(client, fixtures) -> int:
+    """A course and an assignment with the 5-page blank test uploaded."""
     cid = client.post("/api/courses", json={"name": "C"}).json()["id"]
     aid = client.post(f"/api/courses/{cid}/assignments", json={"name": "A"}).json()["id"]
     detail = upload(client, f"/api/assignments/{aid}/blank", fixtures["blank"])
     assert detail["blank_pages"] == 5
     assert [p["kind"] for p in detail["pages"]] == ["cover", "problem", "problem", "problem", "problem"]
     assert [p["label"] for p in detail["problems"]] == ["1", "2", "3", "4"]
+    return aid
 
+
+def test_upload_splits_a_scan_into_tests(client, fixtures):
+    aid = new_assignment(client, fixtures)
     detail = upload(client, f"/api/assignments/{aid}/batches", fixtures["scans"])
-    simplex = detail["batches"][0]
-    assert (simplex["tests"], simplex["pages_per_test"], simplex["leftover"], simplex["mode"]) == (3, 5, 0, "identity")
+    b = detail["batches"][0]
+    assert (b["tests"], b["pages_per_test"], b["leftover"], b["mode"]) == (3, 5, 0, "identity")
+    assert detail["progress"]["submissions"] == 3
 
+
+def test_duplex_scan_maps_to_odd_pages(client, fixtures):
+    aid = new_assignment(client, fixtures)
     detail = upload(client, f"/api/assignments/{aid}/batches", fixtures["duplex"], pages_per_test="10")
-    duplex = detail["batches"][1]
-    assert (duplex["tests"], duplex["leftover"], duplex["mode"]) == (3, 0, "odd")
-    assert duplex["page_map"] == [0, 2, 4, 6, 8]
-
-    detail = upload(client, f"/api/assignments/{aid}/batches", fixtures["scans"], pages_per_test="4")
-    odd = detail["batches"][2]
-    assert (odd["tests"], odd["leftover"], odd["mode"]) == (3, 3, "custom")
-    assert detail["progress"]["submissions"] == 9
-
+    b = detail["batches"][0]
+    assert (b["tests"], b["leftover"], b["mode"]) == (3, 0, "odd")
+    assert b["page_map"] == [0, 2, 4, 6, 8]
     subs = client.get(f"/api/assignments/{aid}/submissions").json()["submissions"]
-    assert [(s["first_page"], s["page_count"]) for s in subs if s["batch_id"] == duplex["id"]] == [
-        (0, 10),
-        (10, 10),
-        (20, 10),
-    ]
+    assert [(s["first_page"], s["page_count"]) for s in subs] == [(0, 10), (10, 10), (20, 10)]
 
-    r = client.patch(f"/api/batches/{odd['id']}", json={"page_map": [0, 1, 1, 2, 3]})
-    assert r.json()["batches"][2]["page_map"] == [0, 1, 1, 2, 3]
-    assert client.patch(f"/api/batches/{odd['id']}", json={"page_map": [0, 1, 2, 3, 4]}).status_code == 400
 
-    r = client.patch(f"/api/batches/{odd['id']}", json={"pages_per_test": 5})
-    resplit = r.json()["batches"][2]
+def test_mapping_and_resplit(client, fixtures):
+    aid = new_assignment(client, fixtures)
+    detail = upload(client, f"/api/assignments/{aid}/batches", fixtures["scans"], pages_per_test="4")
+    b = detail["batches"][0]
+    assert (b["tests"], b["leftover"], b["mode"]) == (3, 3, "custom")
+
+    r = client.patch(f"/api/batches/{b['id']}", json={"page_map": [0, 1, 1, 2, 3]})
+    assert r.json()["batches"][0]["page_map"] == [0, 1, 1, 2, 3]
+    assert client.patch(f"/api/batches/{b['id']}", json={"page_map": [0, 1, 2, 3, 4]}).status_code == 400
+
+    resplit = client.patch(f"/api/batches/{b['id']}", json={"pages_per_test": 5}).json()["batches"][0]
     assert (resplit["tests"], resplit["leftover"], resplit["mode"]) == (3, 0, "identity")
 
-    detail = client.delete(f"/api/batches/{duplex['id']}").json()
-    assert len(detail["batches"]) == 2
-    assert detail["progress"]["submissions"] == 6
+    detail = client.delete(f"/api/batches/{b['id']}").json()
+    assert detail["batches"] == []
+    assert detail["progress"]["submissions"] == 0
+
+
+def test_another_pdf_carries_on_from_the_last_page(client, fixtures):
+    aid = new_assignment(client, fixtures)
+    detail = upload(client, f"/api/assignments/{aid}/batches", fixtures["scans"], pages_per_test="8")
+    b = detail["batches"][0]
+    assert (b["page_count"], b["tests"], b["leftover"]) == (15, 1, 7)
+    client.patch(f"/api/batches/{b['id']}", json={"checked": True})
+
+    detail = upload(client, f"/api/assignments/{aid}/batches", fixtures["scans"])
+    assert len(detail["batches"]) == 1, "a second PDF joins the scan instead of starting its own"
+    b = detail["batches"][0]
+    assert (b["page_count"], b["tests"], b["leftover"]) == (30, 3, 6)
+    assert b["filename"] == "scans.pdf, scans.pdf"
+    assert b["checked"] is False, "the new tests have not been looked at yet"
+
+    subs = client.get(f"/api/assignments/{aid}/submissions").json()["submissions"]
+    assert [(s["first_page"], s["page_count"]) for s in subs] == [(0, 8), (8, 8), (16, 8)]
+    assert [p["scan_page"] for p in subs[0]["pages"]] == list(range(8)), "the first test is untouched"
+    # The test straddling the cut takes the tail of the first file and the head of the second.
+    assert [p["scan_page"] for p in subs[1]["pages"]] == [8, 9, 10, 11, 12, 13, 14, 15]
+    assert client.get(f"/api/pages/{b['key']}/29.png").status_code == 200
+    assert client.get(f"/api/pages/{b['key']}/30.png").status_code == 404
+
+
+def test_pages_per_test_is_kept_across_files(client, fixtures):
+    aid = new_assignment(client, fixtures)
+    upload(client, f"/api/assignments/{aid}/batches", fixtures["scans"], pages_per_test="4")
+    # A later file cannot change how the scan is cut up, whatever it sends.
+    detail = upload(client, f"/api/assignments/{aid}/batches", fixtures["scans"], pages_per_test="10")
+    b = detail["batches"][0]
+    assert (b["pages_per_test"], b["page_count"], b["tests"]) == (4, 30, 7)
+
+
+def test_a_test_split_across_two_pdfs_exports_in_one_piece(client, fixtures):
+    # The blank test doubles as a scan here, so the exported pages can be told apart by their text.
+    cid = client.post("/api/courses", json={"name": "C"}).json()["id"]
+    client.put(f"/api/courses/{cid}/roster", json={"text": "Ann One"})
+    aid = client.post(f"/api/courses/{cid}/assignments", json={"name": "Split"}).json()["id"]
+    upload(client, f"/api/assignments/{aid}/blank", fixtures["blank"])
+    upload(client, f"/api/assignments/{aid}/batches", fixtures["blank"], pages_per_test="3")
+    detail = upload(client, f"/api/assignments/{aid}/batches", fixtures["blank"])
+    assert (detail["batches"][0]["tests"], detail["batches"][0]["leftover"]) == (3, 1)
+
+    subs = client.get(f"/api/assignments/{aid}/submissions").json()
+    straddling = subs["submissions"][1]  # scan pages 3, 4 from the first file and 5 from the second
+    assert [p["scan_page"] for p in straddling["pages"]] == [3, 4, 5]
+    client.put(f"/api/submissions/{straddling['id']}/student", json={"student_id": subs["students"][0]["id"]})
+
+    assert client.post(f"/api/assignments/{aid}/export").json()["files"] == ["One_Ann.pdf"]
+    with pymupdf.open(db.data_dir() / "exports" / "Split" / "One_Ann.pdf") as doc:
+        assert doc.page_count == 3
+        assert "Problem 3" in doc[0].get_text()
+        assert "Problem 4" in doc[1].get_text()
+        assert "Algebra Quiz 3" in doc[2].get_text(), "the page after the cut comes from the second PDF"
 
 
 def test_page_kinds(client, fixtures):

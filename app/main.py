@@ -52,9 +52,8 @@ def remove_files(key: str | None) -> None:
     shutil.rmtree(pages_dir(key), ignore_errors=True)
 
 
-def save_upload(file: UploadFile, key: str) -> int:
-    """Store an uploaded PDF as uploads/<key>.pdf, render its pages, and return the page count."""
-    path = uploads_dir() / f"{key}.pdf"
+def store_pdf(file: UploadFile, path: Path) -> None:
+    """Write an upload to disk, rejecting anything that is not a usable PDF."""
     with path.open("wb") as f:
         shutil.copyfileobj(file.file, f)
     try:
@@ -62,6 +61,12 @@ def save_upload(file: UploadFile, key: str) -> int:
     except ValueError:
         path.unlink(missing_ok=True)
         raise HTTPException(400, "Not a PDF")
+
+
+def save_upload(file: UploadFile, key: str) -> int:
+    """Store an uploaded PDF as uploads/<key>.pdf, render its pages, and return the page count."""
+    path = uploads_dir() / f"{key}.pdf"
+    store_pdf(file, path)
     return pdf.render_pages(path, pages_dir(key))
 
 
@@ -379,12 +384,28 @@ def set_page(assignment_id: int, page: int, body: PageIn):
 # ---------------------------------------------------------------- batches
 
 
+def add_submissions(conn: sqlite3.Connection, batch_id: int, page_count: int, pages_per_test: int) -> int:
+    """Create the tests that the scan now holds and that do not exist yet. Returns how many."""
+    ranges, _ = pdf.split_ranges(page_count, pages_per_test)
+    have = {r[0] for r in conn.execute("SELECT first_page FROM submissions WHERE batch_id = ?", (batch_id,))}
+    fresh = [r for r in ranges if r[0] not in have]
+    db.create_submissions(conn, batch_id, fresh)
+    return len(fresh)
+
+
 @app.post("/api/assignments/{assignment_id}/batches")
 def upload_batch(assignment_id: int, file: UploadFile = File(...), pages_per_test: int | None = Form(None)):
+    """Add a scan PDF. Later PDFs continue the same scan, so a test may span two files."""
     with db.session() as conn:
         a = assignment_row(conn, assignment_id)
+        scan = conn.execute(
+            "SELECT * FROM batches WHERE assignment_id = ? ORDER BY id LIMIT 1", (assignment_id,)
+        ).fetchone()
     if not a["blank_pages"]:
         raise HTTPException(400, "Upload the blank test first")
+    if scan:
+        return continue_scan(assignment_id, scan, file)
+
     ppt = pages_per_test or a["blank_pages"]
     if ppt < 1:
         raise HTTPException(400, "Pages per test must be at least 1")
@@ -394,7 +415,6 @@ def upload_batch(assignment_id: int, file: UploadFile = File(...), pages_per_tes
     except Exception:
         remove_files(key)
         raise
-    ranges, _ = pdf.split_ranges(count, ppt)
     with db.session() as conn:
         cur = conn.execute(
             """INSERT INTO batches (assignment_id, key, filename, page_count, pages_per_test, page_map)
@@ -408,7 +428,31 @@ def upload_batch(assignment_id: int, file: UploadFile = File(...), pages_per_tes
                 json.dumps(pdf.default_page_map(a["blank_pages"], ppt)),
             ),
         )
-        db.create_submissions(conn, cur.lastrowid, ranges)
+        add_submissions(conn, cur.lastrowid, count, ppt)
+        return assignment_detail(conn, assignment_id)
+
+
+def continue_scan(assignment_id: int, scan: sqlite3.Row, file: UploadFile) -> dict:
+    """Append a PDF to the scan already uploaded: its first page follows the last one there.
+
+    Pages left over from the previous file start the next test, so a test split across two
+    files comes back together. Tests already made keep their pages.
+    """
+    key = scan["key"]
+    incoming = uploads_dir() / f"{key}_add_{secrets.token_hex(4)}.pdf"
+    store_pdf(file, incoming)
+    try:
+        total = pdf.append_pdf(uploads_dir() / f"{key}.pdf", incoming, pages_dir(key))
+    finally:
+        incoming.unlink(missing_ok=True)
+    with db.session() as conn:
+        added = add_submissions(conn, scan["id"], total, scan["pages_per_test"])
+        names = f"{scan['filename']}, {file.filename or 'scan.pdf'}"
+        conn.execute(
+            # New tests have never been looked at, so the order needs checking again.
+            "UPDATE batches SET page_count = ?, filename = ?, checked = ? WHERE id = ?",
+            (total, names, 0 if added else scan["checked"], scan["id"]),
+        )
         return assignment_detail(conn, assignment_id)
 
 

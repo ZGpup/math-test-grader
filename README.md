@@ -30,7 +30,8 @@ uv run pytest
 
 1. Home: add a course, then paste the roster (one student per line, `First Last` or `Last, First`).
 2. Add an assignment, upload the blank test, and set the cover page plus each problem's label and points.
-3. Upload scan PDFs with the pages per test, and check the problem-to-scan-page mapping.
+3. Upload the scan with the pages per test, and check the problem-to-scan-page mapping. If the scanner
+   split the job into several PDFs, add them in order: each one carries on where the last stopped.
 4. Organize pages: one column per test. Drag a page that was fed in the wrong order to its slot, turn
    the ones that came out upside down or mirrored, then press "Order is correct" to unlock the rest.
 5. Match names: click the student for each cover page.

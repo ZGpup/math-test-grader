@@ -28,16 +28,38 @@ def page_png(out_dir: Path, index: int, thumb: bool = False) -> Path:
     return out_dir / (f"{index:04d}_t.png" if thumb else f"{index:04d}.png")
 
 
+def _render_range(doc: pymupdf.Document, out_dir: Path, start: int, stop: int, dpi: int) -> None:
+    for i in range(start, stop):
+        pix = doc[i].get_pixmap(dpi=dpi, alpha=False)
+        pix.save(page_png(out_dir, i))
+        pix.shrink(THUMB_SHRINK)
+        pix.save(page_png(out_dir, i, thumb=True))
+
+
 def render_pages(pdf_path: Path, out_dir: Path, dpi: int = RENDER_DPI) -> int:
     """Render every page to <out_dir>/NNNN.png plus a NNNN_t.png thumbnail."""
     out_dir.mkdir(parents=True, exist_ok=True)
     with pymupdf.open(pdf_path) as doc:
-        for i, page in enumerate(doc):
-            pix = page.get_pixmap(dpi=dpi, alpha=False)
-            pix.save(page_png(out_dir, i))
-            pix.shrink(THUMB_SHRINK)
-            pix.save(page_png(out_dir, i, thumb=True))
+        _render_range(doc, out_dir, 0, doc.page_count, dpi)
         return doc.page_count
+
+
+def append_pdf(pdf_path: Path, extra: Path, out_dir: Path, dpi: int = RENDER_DPI) -> int:
+    """Add another PDF to the end of a scan, render only its pages, and return the new page count.
+
+    Pages already rendered keep their numbers, so their cached images stay good.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    tmp = pdf_path.with_name(f"{pdf_path.name}.tmp")
+    with pymupdf.open(pdf_path) as doc, pymupdf.open(extra) as more:
+        start = doc.page_count
+        doc.insert_pdf(more)
+        total = doc.page_count
+        doc.save(tmp, garbage=3, deflate=True)
+    tmp.replace(pdf_path)
+    with pymupdf.open(pdf_path) as doc:
+        _render_range(doc, out_dir, start, total, dpi)
+    return total
 
 
 def split_ranges(total_pages: int, pages_per_test: int) -> tuple[list[tuple[int, int]], int]:

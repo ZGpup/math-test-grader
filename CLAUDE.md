@@ -63,8 +63,9 @@ Blank test
 
 Scans
 - The problem-to-scan-page mapping is stored per blank page (cover included), so changing problem labels or points never loses it. When pages per test is neither equal to nor double the blank page count, the mapping table opens with a one-to-one default (clamped to the last scan page).
-- Leftover pages that don't fill a whole test are ignored, and a warning shows how many.
-- Changing pages per test on an uploaded file re-splits it. That discards the file's name matches and placed comments, so it asks first.
+- An assignment has one scan, however many PDFs it took. A scanner that cuts a job in half produces files that carry on from each other, so a later PDF is appended to the first one in upload order: its pages are added to `uploads/<key>.pdf`, rendered from the old page count up (so cached images stay good), and the stream is re-cut into tests. A test can therefore span two files. Pages per test is asked once, for the first PDF.
+- Pages past the last full test are not lost, they wait to be the start of the next test when the next PDF arrives. Appending never touches tests that already exist, and it clears `checked` only when it makes new ones.
+- Changing pages per test re-splits the whole scan. That discards the name matches and placed comments, so it asks first.
 
 Page order
 - Which scan page sits in a test's page slot is stored per slot (`submission_pages`), so a misfed or upside-down page is fixed once and every screen follows. `submissions.first_page` only marks where a test starts in scan order and how many pages it has.
