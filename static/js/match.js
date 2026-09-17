@@ -51,14 +51,18 @@ function render() {
   $('#position').textContent = `${idx + 1}/${subs.length}`;
   $('#unmatch').disabled = !s.student_id;
 
-  $('#page').src = pageUrl(s.key, s.first_page + page);
+  $('#page').src = pageSrc(s, page);
+  $('#page').className = flipClass(pageAt(s, page));
   $('#page-label').textContent = `Page ${page + 1}/${s.page_count}`;
   $('#prev-page').disabled = page <= 0;
   $('#next-page').disabled = page >= s.page_count - 1;
 
   $('#subs').replaceChildren(...subs.map((sub, i) => {
     const li = h('li', { class: i === idx ? 'current' : '', onclick: () => show(i) },
-      h('img', { src: pageUrl(sub.key, sub.first_page + coverOffset(sub), true), alt: '', loading: 'lazy' }),
+      h('img', {
+        src: pageSrc(sub, coverOffset(sub), true), alt: '', loading: 'lazy',
+        class: flipClass(pageAt(sub, coverOffset(sub))),
+      }),
       h('span', { class: sub.student_id ? '' : 'unmatched' }, `${i + 1}. `, studentName(sub) || 'Unmatched'));
     return li;
   }));

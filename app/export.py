@@ -198,6 +198,33 @@ def safe_filename(s: str) -> str:
     return re.sub(r"[^\w.-]+", "_", s).strip("._")
 
 
+def _mirror_page(doc: pymupdf.Document, page: pymupdf.Page) -> None:
+    """Flip a page left to right by transforming its contents, leaving its box alone.
+
+    Anything drawn afterwards (annotations, the score box) is placed normally.
+    """
+    box = page.mediabox
+    matrix = f"-1 0 0 1 {box.x0 + box.x1} 0 cm\n".encode()
+    xref = page.get_contents()[0]
+    doc.update_stream(xref, b"q\n" + matrix + page.read_contents() + b"\nQ\n")
+    page.set_contents(xref)
+
+
+def _build_submission(source: pymupdf.Document, pages: list[dict]) -> pymupdf.Document:
+    """One test as its own document: the chosen scan pages, in order, each the right way up."""
+    out = pymupdf.open()
+    for p in pages:
+        out.insert_pdf(source, from_page=p["scan_page"], to_page=p["scan_page"])
+    for page, p in zip(out, pages):
+        if p["upside_down"]:
+            page.set_rotation((page.rotation + 180) % 360)
+        if page.rotation:
+            page.remove_rotation()
+        if p["mirrored"]:
+            _mirror_page(out, page)
+    return out
+
+
 def _draw_annotation(page: pymupdf.Page, x: float, y: float, lines: list[tuple[bytes, float, float]]) -> None:
     W, H = page.rect.width, page.rect.height
     pad = ANN_PAD * ANN_FONT * W
@@ -284,13 +311,7 @@ def export_pdfs(conn: sqlite3.Connection, assignment_id: int) -> tuple[list[Path
                 n += 1
             if sub["key"] not in sources:
                 sources[sub["key"]] = pymupdf.open(data / "uploads" / f"{sub['key']}.pdf")
-            out = pymupdf.open()
-            out.insert_pdf(
-                sources[sub["key"]], from_page=sub["first_page"], to_page=sub["first_page"] + sub["page_count"] - 1
-            )
-            for page in out:
-                if page.rotation:
-                    page.remove_rotation()
+            out = _build_submission(sources[sub["key"]], sub["pages"])
             annotations = conn.execute(
                 "SELECT comment_id, page, x, y FROM annotations WHERE submission_id = ? ORDER BY id", (sub["id"],)
             )

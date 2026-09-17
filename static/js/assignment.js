@@ -8,10 +8,6 @@ let uploading = false;
 const KIND_LABELS = { cover: 'Cover', problem: 'Problem', none: 'None' };
 const MODE_LABELS = { identity: 'one-to-one', odd: 'odd scan pages', custom: 'custom' };
 
-function plural(n, one, many) {
-  return `${n} ${n === 1 ? one : many}`;
-}
-
 // ------------------------------------------------------------------ blank test
 
 function renderTotals() {
@@ -164,6 +160,11 @@ function batchBlock(b) {
         `${b.page_count} pages is not divisible by ${b.pages_per_test}: ${plural(b.leftover, 'leftover page', 'leftover pages')} ignored`) : null,
       h('span', { class: 'spacer' }),
       h('button', { onclick: () => deleteBatch(b) }, 'Delete')),
+    h('div', { class: 'row', style: 'margin-top: 6px' },
+      h('a', { class: 'btn', href: `organize.html?id=${assignmentId}&batch=${b.id}` }, 'Organize pages'),
+      b.checked
+        ? h('span', { class: 'muted' }, '✓ Page order checked')
+        : h('span', { class: 'warning' }, 'Page order not checked yet')),
     h('details', { open: b.mode === 'custom' },
       h('summary', {}, `Page mapping: ${MODE_LABELS[b.mode]}`),
       mappingTable(b)));
@@ -230,9 +231,12 @@ async function deleteBatch(b) {
 
 function renderActions() {
   const p = A.progress;
+  // Names and grades hang off page slots, so the page order is settled first.
+  const unchecked = A.batches.filter((b) => !b.checked);
   const links = { '#go-match': 'match', '#go-grade': 'grade', '#go-results': 'results' };
   for (const [sel, page] of Object.entries(links)) {
-    const enabled = p.submissions > 0 && (page !== 'grade' || A.problems.length > 0);
+    let enabled = p.submissions > 0 && (page !== 'grade' || A.problems.length > 0);
+    if (unchecked.length && page !== 'results') enabled = false;
     $(sel).classList.toggle('disabled', !enabled);
     if (enabled) $(sel).href = `${page}.html?id=${assignmentId}`;
     else $(sel).removeAttribute('href');
@@ -240,6 +244,9 @@ function renderActions() {
   $('#matched').textContent = `Matched ${p.matched}/${p.submissions}`;
   $('#graded').textContent = `Graded ${p.graded}/${p.gradable}`;
   const warn = [];
+  if (unchecked.length) {
+    warn.push(`Check the page order of ${unchecked.map((b) => b.filename).join(', ')} first`);
+  }
   if (p.submissions && p.submissions !== p.students) {
     const diff = Math.abs(p.submissions - p.students);
     warn.push(p.submissions < p.students

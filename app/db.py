@@ -44,14 +44,23 @@ CREATE TABLE IF NOT EXISTS batches (
     filename TEXT NOT NULL,
     page_count INTEGER NOT NULL,
     pages_per_test INTEGER NOT NULL,
-    page_map TEXT NOT NULL                 -- JSON: blank page index -> scan page offset in a test
+    page_map TEXT NOT NULL,                -- JSON: blank page index -> scan page offset in a test
+    checked INTEGER NOT NULL DEFAULT 0     -- the page order has been confirmed on the organize screen
 );
 CREATE TABLE IF NOT EXISTS submissions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     batch_id INTEGER NOT NULL REFERENCES batches(id) ON DELETE CASCADE,
-    first_page INTEGER NOT NULL,
+    first_page INTEGER NOT NULL,           -- where this test starts in scan order (sort key and size)
     page_count INTEGER NOT NULL,
     student_id INTEGER REFERENCES students(id) ON DELETE SET NULL
+);
+CREATE TABLE IF NOT EXISTS submission_pages (
+    submission_id INTEGER NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,             -- page offset within the test
+    scan_page INTEGER NOT NULL,            -- 0-based page index in the scan PDF
+    upside_down INTEGER NOT NULL DEFAULT 0,
+    mirrored INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (submission_id, position)
 );
 CREATE TABLE IF NOT EXISTS comments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,6 +83,7 @@ CREATE TABLE IF NOT EXISTS graded (
     PRIMARY KEY (submission_id, problem_id)
 );
 CREATE INDEX IF NOT EXISTS idx_students_course ON students(course_id);
+CREATE INDEX IF NOT EXISTS idx_submission_pages ON submission_pages(submission_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_batch ON submissions(batch_id);
 CREATE INDEX IF NOT EXISTS idx_comments_problem ON comments(problem_id);
 CREATE INDEX IF NOT EXISTS idx_annotations_submission ON annotations(submission_id);
@@ -97,8 +107,24 @@ def connect() -> sqlite3.Connection:
     if path not in _initialized:
         conn.execute("PRAGMA journal_mode = WAL")
         conn.executescript(SCHEMA)
+        migrate(conn)
+        conn.commit()
         _initialized.add(path)
     return conn
+
+
+def migrate(conn: sqlite3.Connection) -> None:
+    """Bring a database written by an older version up to date. A new one needs nothing."""
+    if "checked" not in {r["name"] for r in conn.execute("PRAGMA table_info(batches)")}:
+        conn.execute("ALTER TABLE batches ADD COLUMN checked INTEGER NOT NULL DEFAULT 0")
+        # Scans uploaded before there was a page order screen count as already checked.
+        conn.execute("UPDATE batches SET checked = 1")
+    missing = conn.execute(
+        """SELECT id, first_page, page_count FROM submissions s
+           WHERE NOT EXISTS (SELECT 1 FROM submission_pages p WHERE p.submission_id = s.id)"""
+    ).fetchall()
+    for s in missing:
+        set_pages(conn, s["id"], [(s["first_page"] + i, 0, 0) for i in range(s["page_count"])])
 
 
 @contextmanager
@@ -190,10 +216,63 @@ def students(conn: sqlite3.Connection, course_id: int) -> list[dict]:
 
 
 def create_submissions(conn: sqlite3.Connection, batch_id: int, ranges: list[tuple[int, int]]) -> None:
+    """Create the tests of a batch, each holding its scan pages in scan order."""
+    for first, count in ranges:
+        cur = conn.execute(
+            "INSERT INTO submissions (batch_id, first_page, page_count) VALUES (?, ?, ?)", (batch_id, first, count)
+        )
+        set_pages(conn, cur.lastrowid, [(first + i, 0, 0) for i in range(count)])
+
+
+def set_pages(conn: sqlite3.Connection, submission_id: int, pages: list[tuple[int, int, int]]) -> None:
+    """Replace a test's page list with [(scan_page, upside_down, mirrored), ...]."""
+    conn.execute("DELETE FROM submission_pages WHERE submission_id = ?", (submission_id,))
     conn.executemany(
-        "INSERT INTO submissions (batch_id, first_page, page_count) VALUES (?, ?, ?)",
-        [(batch_id, first, count) for first, count in ranges],
+        """INSERT INTO submission_pages (submission_id, position, scan_page, upside_down, mirrored)
+           VALUES (?, ?, ?, ?, ?)""",
+        [(submission_id, i, page, upside_down, mirrored) for i, (page, upside_down, mirrored) in enumerate(pages)],
     )
+
+
+def page_lists(conn: sqlite3.Connection, assignment_id: int) -> dict[int, list[dict]]:
+    """submission id -> its pages in order."""
+    rows = conn.execute(
+        """SELECT p.submission_id, p.scan_page, p.upside_down, p.mirrored
+           FROM submission_pages p
+           JOIN submissions s ON s.id = p.submission_id
+           JOIN batches b ON b.id = s.batch_id
+           WHERE b.assignment_id = ?
+           ORDER BY p.submission_id, p.position""",
+        (assignment_id,),
+    )
+    pages: dict[int, list[dict]] = {}
+    for r in rows:
+        pages.setdefault(r["submission_id"], []).append(
+            {"scan_page": r["scan_page"], "upside_down": r["upside_down"], "mirrored": r["mirrored"]}
+        )
+    return pages
+
+
+def batch_pages(conn: sqlite3.Connection, batch_id: int) -> list[dict]:
+    """Every page of a batch as one flat list, test by test, in the order they will be graded."""
+    rows = conn.execute(
+        """SELECT p.scan_page, p.upside_down, p.mirrored FROM submission_pages p
+           JOIN submissions s ON s.id = p.submission_id
+           WHERE s.batch_id = ? ORDER BY s.first_page, s.id, p.position""",
+        (batch_id,),
+    )
+    return [dict(r) for r in rows]
+
+
+def set_batch_pages(conn: sqlite3.Connection, batch_id: int, flat: list[tuple[int, int, int]]) -> None:
+    """Deal a flat page list back out to the tests of a batch, in order."""
+    subs = conn.execute(
+        "SELECT id, page_count FROM submissions WHERE batch_id = ? ORDER BY first_page, id", (batch_id,)
+    ).fetchall()
+    at = 0
+    for s in subs:
+        set_pages(conn, s["id"], flat[at : at + s["page_count"]])
+        at += s["page_count"]
 
 
 def submissions(conn: sqlite3.Connection, assignment_id: int, roster_order: bool = False) -> list[dict]:
@@ -209,10 +288,12 @@ def submissions(conn: sqlite3.Connection, assignment_id: int, roster_order: bool
             ORDER BY {order}""",
         (assignment_id,),
     )
+    pages = page_lists(conn, assignment_id)
     result = []
     for r in rows:
         d = dict(r)
         d["page_map"] = json.loads(d["page_map"])
+        d["pages"] = pages.get(d["id"], [])
         result.append(d)
     return result
 

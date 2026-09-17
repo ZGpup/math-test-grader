@@ -257,6 +257,35 @@ button.wide { display: block; width: 100%; margin-top: 8px; padding: 6px; }
 .roster-list li.first-hit { outline: 1px solid var(--accent); outline-offset: -1px; }
 #filter { width: 100%; }
 
+/* ------------------------------------------------------------ organize (page order) */
+
+/* Pages an image the way the organize screen straightened it. */
+.flip { transform: rotate(var(--rot, 0deg)) scaleX(var(--sx, 1)); }
+.flip.upside { --rot: 180deg; }
+.flip.mirrored { --sx: -1; }
+
+.board { flex: 1; min-height: 0; overflow: auto; background: var(--bg-sunken); padding: 14px 16px 30px; }
+.organize { display: flex; align-items: flex-start; gap: 10px; width: max-content; }
+.organize .col { display: flex; flex-direction: column; gap: 8px; width: 136px; }
+.organize .col.labels { position: sticky; left: 0; z-index: 2; width: 118px; background: var(--bg-sunken); }
+.organize .head { height: 40px; font-size: 14px; line-height: 1.25; overflow: hidden; }
+.organize .head .muted { font-size: 12px; }
+.organize .slot { height: 154px; display: flex; flex-direction: column; justify-content: center; font-size: 13px; }
+.organize .slot .row { gap: 6px; margin-top: 4px; }
+.organize .cell { position: relative; height: 154px; border: 1px solid var(--border); background: var(--bg); cursor: grab; }
+.organize .cell img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.organize .cell:hover { border-color: var(--accent); }
+.organize .cell.dragging { opacity: 0.35; }
+.organize .cell.drop-target { outline: 2px solid var(--accent); outline-offset: -2px; }
+.organize .cell .pnum {
+  position: absolute; left: 0; top: 0; padding: 0 4px;
+  font-size: 11px; color: var(--muted); background: var(--bg-alt); border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.organize .cell .tools { position: absolute; right: 0; bottom: 0; display: flex; }
+.organize .cell .tools button { font-size: 11px; padding: 0 5px; margin-left: -1px; }
+.organize .cell .tools button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
 /* ------------------------------------------------------------ results */
 
 table.results th { cursor: pointer; user-select: none; }

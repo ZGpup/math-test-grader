@@ -116,6 +116,10 @@ function fmt(n) {
   return String(Math.round(n * 100) / 100);
 }
 
+function plural(n, one, many) {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
 function studentName(s) {
   if (!s || (!s.first_name && !s.last_name)) return '';
   return s.first_name ? `${s.last_name}, ${s.first_name}` : s.last_name;
@@ -123,6 +127,20 @@ function studentName(s) {
 
 function pageUrl(key, index, thumb = false) {
   return `/api/pages/${key}/${index}.png${thumb ? '?thumb=1' : ''}`;
+}
+
+// A test's page at a page offset: which scan page it is and how it was turned on the organize screen.
+function pageAt(s, offset) {
+  return s.pages[Math.max(0, Math.min(offset, s.pages.length - 1))];
+}
+
+function pageSrc(s, offset, thumb = false) {
+  return pageUrl(s.key, pageAt(s, offset).scan_page, thumb);
+}
+
+// Classes that turn an image the way its page was fixed on the organize screen.
+function flipClass(p) {
+  return `flip${p && p.upside_down ? ' upside' : ''}${p && p.mirrored ? ' mirrored' : ''}`;
 }
 
 // Render text with $...$ math via KaTeX. app/export.py splits text the same way.
@@ -215,6 +233,6 @@ function typedConfirmBox(message, word = 'yes', okLabel = 'Delete') {
   });
 }
 
-function showImage(src) {
-  openModal(h('img', { src, alt: '' }), 'image');
+function showImage(src, cls = '') {
+  openModal(h('img', { src, alt: '', class: cls }), 'image');
 }

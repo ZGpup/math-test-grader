@@ -56,8 +56,9 @@ function render() {
   $('#prev-sub').disabled = sidx === 0;
   $('#next-sub').disabled = sidx === G.submissions.length - 1;
 
-  const src = pageUrl(s.key, s.first_page + page);
+  const src = pageSrc(s, page);
   if (img.getAttribute('src') !== src) img.src = src;
+  img.className = flipClass(pageAt(s, page));
   $('#page-label').textContent = `Page ${page + 1}/${s.page_count}`;
   $('#prev-page').disabled = page === 0;
   $('#next-page').disabled = page === s.page_count - 1;
@@ -186,7 +187,7 @@ function editRow(c) {
 function preload(p) {
   for (const j of [sidx + 1, sidx - 1]) {
     const s = G.submissions[j];
-    if (s) new Image().src = pageUrl(s.key, s.first_page + mappedPage(s, p));
+    if (s) new Image().src = pageSrc(s, mappedPage(s, p));
   }
 }
 

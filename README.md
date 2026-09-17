@@ -31,9 +31,11 @@ uv run pytest
 1. Home: add a course, then paste the roster (one student per line, `First Last` or `Last, First`).
 2. Add an assignment, upload the blank test, and set the cover page plus each problem's label and points.
 3. Upload scan PDFs with the pages per test, and check the problem-to-scan-page mapping.
-4. Match names: click the student for each cover page.
-5. Grade: pick a problem, place rubric comments on each student's page, press Enter for the next student.
-6. Results: review the table, download the CSV, export annotated PDFs.
+4. Organize pages: one column per test. Drag a page that was fed in the wrong order to its slot, turn
+   the ones that came out upside down or mirrored, then press "Order is correct" to unlock the rest.
+5. Match names: click the student for each cover page.
+6. Grade: pick a problem, place rubric comments on each student's page, press Enter for the next student.
+7. Results: review the table, download the CSV, export annotated PDFs.
 
 Keyboard: grading uses `←`/`→` to change students, `1`–`9` to apply a comment, and `Enter` for Next. Matching uses typing to filter the roster, `Enter` to assign the top match, and `↑`/`↓` to change tests.
 

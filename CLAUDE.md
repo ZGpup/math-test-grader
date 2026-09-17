@@ -31,9 +31,11 @@ uv run pytest
 1. Home: add a course, then paste the roster (one student per line, `First Last` or `Last, First`).
 2. Add an assignment, upload the blank test, and set the cover page plus each problem's label and points.
 3. Upload scan PDFs with the pages per test, and check the problem-to-scan-page mapping.
-4. Match names: click the student for each cover page.
-5. Grade: pick a problem, place rubric comments on each student's page, press Enter for the next student.
-6. Results: review the table, download the CSV, export annotated PDFs.
+4. Organize pages: one column per test. Drag a misfed page to its slot, turn the ones that came out
+   upside down or mirrored, then press "Order is correct".
+5. Match names: click the student for each cover page.
+6. Grade: pick a problem, place rubric comments on each student's page, press Enter for the next student.
+7. Results: review the table, download the CSV, export annotated PDFs.
 
 Keyboard: grading uses `←`/`→` to change students, `1`–`9` to apply a comment, and `Enter` for Next. Matching uses typing to filter the roster, `Enter` to assign the top match, and `↑`/`↓` to change tests.
 
@@ -63,6 +65,13 @@ Scans
 - The problem-to-scan-page mapping is stored per blank page (cover included), so changing problem labels or points never loses it. When pages per test is neither equal to nor double the blank page count, the mapping table opens with a one-to-one default (clamped to the last scan page).
 - Leftover pages that don't fill a whole test are ignored, and a warning shows how many.
 - Changing pages per test on an uploaded file re-splits it. That discards the file's name matches and placed comments, so it asks first.
+
+Page order
+- Which scan page sits in a test's page slot is stored per slot (`submission_pages`), so a misfed or upside-down page is fixed once and every screen follows. `submissions.first_page` only marks where a test starts in scan order and how many pages it has.
+- The organize screen shows the batch as one flat page list cut into tests. Dropping a page pulls it out and inserts it at that slot, shifting everything in between, so test boundaries and page counts never change and a page fed in the wrong order is fixed with one drag. The row buttons turn a whole row, which is the duplex case where every back side is upside down.
+- Flips are two independent flags, `upside_down` and `mirrored`. On screen they are a CSS transform on the image (`.flip`); in the export the same turn is baked into the PDF page, 180° via the page rotation and the mirror via a matrix prepended to the content stream. Annotations are drawn afterwards, so they read the right way up and land where they were placed.
+- Each scan carries a `checked` flag. Match names and Grade stay locked until every scan's order is confirmed, because both hang off page slots. Re-splitting clears it; fixing the order later does not.
+- Annotations belong to a page slot, not to a scan page. Moving pages after grading leaves them where they were, and the organize screen warns when comments are already placed.
 
 Roster and matching
 - The roster textarea is saved as typed. Student ids survive edits: an unchanged name keeps its id, and an edited line reuses the student on that line. A typo fix therefore keeps the match, and removing a line unmatches that student's test.

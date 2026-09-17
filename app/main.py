@@ -92,6 +92,7 @@ def batch_info(conn: sqlite3.Connection, b: sqlite3.Row, blank_pages: int) -> di
         "leftover": b["page_count"] % b["pages_per_test"],
         "page_map": page_map,
         "mode": pdf.mapping_mode(blank_pages, b["pages_per_test"], page_map),
+        "checked": bool(b["checked"]),
         **dict(stats),
     }
 
@@ -161,6 +162,17 @@ class PageIn(BaseModel):
 class BatchPatch(BaseModel):
     pages_per_test: int | None = Field(None, ge=1)
     page_map: list[int] | None = None
+    checked: bool | None = None
+
+
+class ScanPageIn(BaseModel):
+    scan_page: int = Field(ge=0)
+    upside_down: bool = False
+    mirrored: bool = False
+
+
+class BatchPagesIn(BaseModel):
+    pages: list[ScanPageIn]
 
 
 class MatchIn(BaseModel):
@@ -402,7 +414,8 @@ def upload_batch(assignment_id: int, file: UploadFile = File(...), pages_per_tes
 
 @app.patch("/api/batches/{batch_id}")
 def patch_batch(batch_id: int, body: BatchPatch):
-    """Change pages per test (re-splits the file, discarding matches and grading) or the page mapping."""
+    """Change pages per test (re-splits the file, discarding matches and grading), the page mapping,
+    or whether the page order has been checked."""
     with db.session() as conn:
         b = fetch(conn, "SELECT * FROM batches WHERE id = ?", (batch_id,))
         a = assignment_row(conn, b["assignment_id"])
@@ -412,14 +425,17 @@ def patch_batch(batch_id: int, body: BatchPatch):
             ranges, _ = pdf.split_ranges(b["page_count"], ppt)
             conn.execute("DELETE FROM submissions WHERE batch_id = ?", (batch_id,))
             db.create_submissions(conn, batch_id, ranges)
+            # Re-splitting puts the pages back in scan order, so the order needs checking again.
             conn.execute(
-                "UPDATE batches SET pages_per_test = ?, page_map = ? WHERE id = ?",
+                "UPDATE batches SET pages_per_test = ?, page_map = ?, checked = 0 WHERE id = ?",
                 (ppt, json.dumps(pdf.default_page_map(a["blank_pages"], ppt)), batch_id),
             )
         if body.page_map is not None:
             if len(body.page_map) != a["blank_pages"] or not all(0 <= v < ppt for v in body.page_map):
                 raise HTTPException(400, "Invalid page mapping")
             conn.execute("UPDATE batches SET page_map = ? WHERE id = ?", (json.dumps(body.page_map), batch_id))
+        if body.checked is not None:
+            conn.execute("UPDATE batches SET checked = ? WHERE id = ?", (int(body.checked), batch_id))
         return assignment_detail(conn, b["assignment_id"])
 
 
@@ -431,6 +447,65 @@ def delete_batch(batch_id: int):
         detail = assignment_detail(conn, b["assignment_id"])
     remove_files(b["key"])
     return detail
+
+
+# ---------------------------------------------------------------- page order
+
+
+def slot_labels(conn: sqlite3.Connection, a: sqlite3.Row, b: sqlite3.Row) -> list[str]:
+    """What each page slot of a test is expected to hold, from the blank page mapping."""
+    labels: list[list[str]] = [[] for _ in range(b["pages_per_test"])]
+    by_page = {p["page"]: p["label"] for p in db.problems(conn, a["id"])}
+    for blank_page, offset in enumerate(json.loads(b["page_map"])):
+        if not 0 <= offset < b["pages_per_test"]:
+            continue
+        if blank_page == a["cover_page"]:
+            labels[offset].append("Cover")
+        elif blank_page in by_page:
+            labels[offset].append(f"Problem {by_page[blank_page]}")
+    return [", ".join(names) for names in labels]
+
+
+def batch_state(conn: sqlite3.Connection, batch_id: int) -> dict:
+    """Everything the organize screen needs: the tests of one batch and their pages."""
+    b = fetch(conn, "SELECT * FROM batches WHERE id = ?", (batch_id,))
+    a = assignment_row(conn, b["assignment_id"])
+    subs = [s for s in db.submissions(conn, b["assignment_id"]) if s["batch_id"] == batch_id]
+    return assignment_meta(conn, a) | {
+        "batch": batch_info(conn, b, a["blank_pages"]),
+        "slots": slot_labels(conn, a, b),
+        "tests": [
+            {
+                "id": s["id"],
+                "first_name": s["first_name"],
+                "last_name": s["last_name"],
+                "pages": s["pages"],
+            }
+            for s in subs
+        ],
+    }
+
+
+@app.get("/api/batches/{batch_id}/pages")
+def get_batch_pages(batch_id: int):
+    with db.session() as conn:
+        return batch_state(conn, batch_id)
+
+
+@app.put("/api/batches/{batch_id}/pages")
+def put_batch_pages(batch_id: int, body: BatchPagesIn):
+    """Reorder and flip the pages of a batch. The pages themselves must stay the same ones."""
+    with db.session() as conn:
+        fetch(conn, "SELECT id FROM batches WHERE id = ?", (batch_id,))
+        current = db.batch_pages(conn, batch_id)
+        if len(body.pages) != len(current):
+            raise HTTPException(400, f"Expected {len(current)} pages, got {len(body.pages)}")
+        if sorted(p.scan_page for p in body.pages) != sorted(p["scan_page"] for p in current):
+            raise HTTPException(400, "The same pages must be used exactly once each")
+        db.set_batch_pages(
+            conn, batch_id, [(p.scan_page, int(p.upside_down), int(p.mirrored)) for p in body.pages]
+        )
+        return batch_state(conn, batch_id)
 
 
 @app.get("/api/pages/{key}/{index}.png")
