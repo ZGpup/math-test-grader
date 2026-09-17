@@ -27,7 +27,9 @@ CREATE TABLE IF NOT EXISTS assignments (
     name TEXT NOT NULL,
     blank_key TEXT,                        -- uploads/<key>.pdf, pages/<key>/
     blank_pages INTEGER NOT NULL DEFAULT 0,
-    cover_page INTEGER NOT NULL DEFAULT 0   -- 0-based blank page index
+    cover_page INTEGER NOT NULL DEFAULT 0, -- 0-based blank page index
+    answer_key TEXT,                       -- worked solutions, shown beside a student's work
+    answer_key_pages INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS problems (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,6 +141,11 @@ def migrate(conn: sqlite3.Connection) -> None:
         conn.execute("PRAGMA foreign_keys = OFF")
         conn.executescript(COMMENTS_REBUILD)
         conn.execute("PRAGMA foreign_keys = ON")
+    columns = {r["name"] for r in conn.execute("PRAGMA table_info(assignments)")}
+    if "answer_key" not in columns:
+        conn.execute("ALTER TABLE assignments ADD COLUMN answer_key TEXT")
+    if "answer_key_pages" not in columns:
+        conn.execute("ALTER TABLE assignments ADD COLUMN answer_key_pages INTEGER NOT NULL DEFAULT 0")
     if "checked" not in {r["name"] for r in conn.execute("PRAGMA table_info(batches)")}:
         conn.execute("ALTER TABLE batches ADD COLUMN checked INTEGER NOT NULL DEFAULT 0")
         # Scans uploaded before there was a page order screen count as already checked.

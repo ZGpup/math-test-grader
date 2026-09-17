@@ -4,6 +4,7 @@
 
 Writes:
     blank.pdf         5 pages: a cover plus 4 problems
+    answer_key.pdf    the same 5 pages with the correct work filled in
     scans.pdf         3 students x 5 pages = 15 pages
     scans_duplex.pdf  the same with a blank back after every page = 30 pages
     roster.txt        the 3 students, in both accepted formats
@@ -59,6 +60,22 @@ def make_blank(path: Path) -> Path:
     return path
 
 
+def make_key(path: Path) -> Path:
+    """The answer key: the blank test page for page, cover included, with the work filled in."""
+    doc = pymupdf.open()
+    for i in range(1 + len(PROBLEMS)):
+        page = doc.new_page(width=W, height=H)
+        _draw_blank_page(page, i)
+        if i == 0:
+            page.insert_text((140, 186), "ANSWER KEY", fontname="tibo", fontsize=22, color=INK)
+        else:
+            for k, line in enumerate(PROBLEMS[i - 1][1]):
+                page.insert_text((100 + 8 * k, 210 + 48 * k), line, fontname="tiit", fontsize=22, color=INK)
+    doc.save(path)
+    doc.close()
+    return path
+
+
 def _rasterize(doc: pymupdf.Document) -> pymupdf.Document:
     """Turn vector pages into image-only pages, like a scanner does."""
     out = pymupdf.open()
@@ -105,6 +122,7 @@ def make_all(out: Path) -> dict[str, Path]:
     out.mkdir(parents=True, exist_ok=True)
     return {
         "blank": make_blank(out / "blank.pdf"),
+        "key": make_key(out / "answer_key.pdf"),
         "scans": make_scans(out / "scans.pdf"),
         "duplex": make_scans(out / "scans_duplex.pdf", duplex=True),
         "roster": make_roster(out / "roster.txt"),

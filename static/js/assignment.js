@@ -86,6 +86,60 @@ $('#blank-file').addEventListener('change', async (e) => {
   }
 });
 
+// ------------------------------------------------------------------ answer key
+
+// Any page count is fine: grading shows one key page at a time, beside the student's work.
+// A key page starts out beside the problem sitting on the same page of the test, which is the
+// whole story when the two have the same pages, and a starting point otherwise.
+function renderAnswerKey() {
+  $('#key-button').firstChild.textContent = A.answer_key ? 'Replace PDF' : 'Upload PDF';
+  $('#key-delete').hidden = !A.answer_key;
+  $('#key-status').textContent = A.answer_key
+    ? `${plural(A.answer_key_pages, 'page', 'pages')}, shown beside the student's work while grading`
+    : "Optional. Shown beside the student's work while grading";
+  const pages = Array.from({ length: A.answer_key_pages }, (_, i) => keyCard(i));
+  $('#key-pages').replaceChildren(...(A.answer_key ? pages : []));
+}
+
+// What the test has on the same page, which is where this key page starts out while grading.
+function answers(index) {
+  const p = A.pages[index];
+  if (!p) return '';
+  return p.kind === 'cover' ? 'Cover' : p.kind === 'problem' ? `Problem ${p.problem.label}` : '';
+}
+
+function keyCard(index) {
+  const label = answers(index);
+  return h('div', { class: 'page-card' },
+    h('img', {
+      src: pageUrl(A.answer_key, index, true), alt: '',
+      onclick: () => showImage(pageUrl(A.answer_key, index)),
+    }),
+    h('div', { class: 'fields' },
+      h('span', { class: 'muted' }, `p. ${index + 1}`),
+      h('span', { class: label ? '' : 'muted' }, label || '—')));
+}
+
+$('#key-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  $('#key-status').textContent = 'Rendering pages';
+  try {
+    A = await POST(`/api/assignments/${assignmentId}/answer_key`, form);
+  } finally {
+    render();
+  }
+});
+
+$('#key-delete').addEventListener('click', async () => {
+  if (!await confirmBox('Remove the answer key?', 'Remove')) return;
+  A = await DELETE(`/api/assignments/${assignmentId}/answer_key`);
+  render();
+});
+
 // ------------------------------------------------------------------ scans
 
 // Pages per test belongs to the scan as a whole, so only the very first PDF asks for it.
@@ -269,6 +323,7 @@ function render() {
   header(assignmentCrumbs(A));
   if (document.activeElement !== $('#name')) $('#name').value = A.name;
   renderPages();
+  renderAnswerKey();
   renderBatches();
   renderPending();
   renderActions();

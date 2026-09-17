@@ -17,6 +17,9 @@
   border-radius: 0 !important;
 }
 
+/* The rules below set `display` on elements that are hidden by the attribute, so it wins here. */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   background: var(--bg);
@@ -176,6 +179,14 @@ body.app { height: 100vh; display: flex; flex-direction: column; overflow: hidde
 }
 .sheet img { display: block; width: 100%; -webkit-user-drag: none; }
 .sheet.drop-target { outline: 2px solid var(--accent); }
+
+/* The answer key sits beside the student's work, each page taking half the room. Annotation sizes
+   are container units of their own sheet, so they stay true to the page at any width. */
+.sheets { display: flex; align-items: flex-start; justify-content: center; gap: 14px; }
+.sheets .sheet { flex: 1 1 0; min-width: 0; margin: 0; }
+.key-sheet { outline: 2px solid var(--accent); outline-offset: -1px; }
+.key-controls { display: inline-flex; align-items: center; gap: 8px; }
+button#answer-key.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 .tabs { display: flex; gap: 0; flex-wrap: wrap; }
 .tabs button { border: 1px solid var(--border); margin-right: -1px; padding: 3px 12px; }

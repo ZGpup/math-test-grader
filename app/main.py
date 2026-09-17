@@ -124,6 +124,8 @@ def assignment_detail(conn: sqlite3.Connection, assignment_id: int) -> dict:
         "blank_key": a["blank_key"],
         "blank_pages": a["blank_pages"],
         "cover_page": a["cover_page"],
+        "answer_key": a["answer_key"],
+        "answer_key_pages": a["answer_key_pages"],
         "pages": pages,
         "problems": probs,
         "total_points": sum(p["max_points"] for p in probs),
@@ -263,7 +265,11 @@ def rename_course(course_id: int, body: NameIn):
 @app.delete("/api/courses/{course_id}")
 def delete_course(course_id: int):
     with db.session() as conn:
-        keys = [r[0] for r in conn.execute("SELECT blank_key FROM assignments WHERE course_id = ?", (course_id,))]
+        keys = [
+            k
+            for r in conn.execute("SELECT blank_key, answer_key FROM assignments WHERE course_id = ?", (course_id,))
+            for k in r
+        ]
         keys += [
             r[0]
             for r in conn.execute(
@@ -314,7 +320,7 @@ def rename_assignment(assignment_id: int, body: NameIn):
 def delete_assignment(assignment_id: int):
     with db.session() as conn:
         a = assignment_row(conn, assignment_id)
-        keys = [a["blank_key"]] + [
+        keys = [a["blank_key"], a["answer_key"]] + [
             r[0] for r in conn.execute("SELECT key FROM batches WHERE assignment_id = ?", (assignment_id,))
         ]
         conn.execute("DELETE FROM assignments WHERE id = ?", (assignment_id,))
@@ -337,8 +343,10 @@ def upload_blank(assignment_id: int, file: UploadFile = File(...)):
         raise
     with db.session() as conn:
         conn.execute("DELETE FROM problems WHERE assignment_id = ?", (assignment_id,))
+        # A new blank test is a different test, so its answer key no longer answers anything.
         conn.execute(
-            "UPDATE assignments SET blank_key = ?, blank_pages = ?, cover_page = 0 WHERE id = ?",
+            """UPDATE assignments SET blank_key = ?, blank_pages = ?, cover_page = 0,
+               answer_key = NULL, answer_key_pages = 0 WHERE id = ?""",
             (key, count, assignment_id),
         )
         conn.executemany(
@@ -347,6 +355,37 @@ def upload_blank(assignment_id: int, file: UploadFile = File(...)):
         )
         detail = assignment_detail(conn, assignment_id)
     remove_files(a["blank_key"])
+    remove_files(a["answer_key"])
+    return detail
+
+
+@app.post("/api/assignments/{assignment_id}/answer_key")
+def upload_answer_key(assignment_id: int, file: UploadFile = File(...)):
+    """Upload the worked answer key. Any page count: grading shows one of its pages at a time."""
+    with db.session() as conn:
+        a = assignment_row(conn, assignment_id)
+    key = f"k{assignment_id}_{secrets.token_hex(4)}"
+    try:
+        count = save_upload(file, key)
+    except Exception:
+        remove_files(key)
+        raise
+    with db.session() as conn:
+        conn.execute(
+            "UPDATE assignments SET answer_key = ?, answer_key_pages = ? WHERE id = ?", (key, count, assignment_id)
+        )
+        detail = assignment_detail(conn, assignment_id)
+    remove_files(a["answer_key"])
+    return detail
+
+
+@app.delete("/api/assignments/{assignment_id}/answer_key")
+def delete_answer_key(assignment_id: int):
+    with db.session() as conn:
+        a = assignment_row(conn, assignment_id)
+        conn.execute("UPDATE assignments SET answer_key = NULL, answer_key_pages = 0 WHERE id = ?", (assignment_id,))
+        detail = assignment_detail(conn, assignment_id)
+    remove_files(a["answer_key"])
     return detail
 
 
@@ -554,7 +593,7 @@ def put_batch_pages(batch_id: int, body: BatchPagesIn):
 
 @app.get("/api/pages/{key}/{index}.png")
 def page_image(key: str, index: int, thumb: bool = False):
-    if not re.fullmatch(r"[ab]\d+_[0-9a-f]+", key):
+    if not re.fullmatch(r"[abk]\d+_[0-9a-f]+", key):
         raise HTTPException(404, "Not found")
     path = pdf.page_png(pages_dir(key), index, thumb)
     if not path.is_file():
@@ -619,6 +658,8 @@ def grading_state(assignment_id: int):
             (assignment_id,),
         )
         return assignment_meta(conn, a) | {
+            "answer_key": a["answer_key"],
+            "answer_key_pages": a["answer_key_pages"],
             "problems": probs,
             "submissions": db.submissions(conn, assignment_id, roster_order=True),
             "annotations": [dict(r) for r in annotations],

@@ -27,10 +27,19 @@
   <button id="prev-page">Prev page</button>
   <span id="page-label" class="muted"></span>
   <button id="next-page">Next page</button>
+  <button id="answer-key" hidden>Answer key</button>
+  <span id="key-controls" class="key-controls" hidden>
+    <button id="key-prev">Prev</button>
+    <span id="key-label" class="muted"></span>
+    <button id="key-next">Next</button>
+  </span>
 </div>
 <div class="workspace">
   <div class="viewer">
-    <div class="sheet" id="sheet"><img id="page" alt="" draggable="false"></div>
+    <div class="sheets">
+      <div class="sheet" id="sheet"><img id="page" alt="" draggable="false"></div>
+      <div class="sheet key-sheet" id="key-sheet" hidden><img id="key-page" alt="" draggable="false"></div>
+    </div>
   </div>
   <aside class="sidebar">
     <div class="score-row">

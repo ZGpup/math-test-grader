@@ -6,6 +6,8 @@ let pid = null; // current problem id
 let sidx = 0; // current submission index
 let page = 0; // page offset within the current submission
 let editing = null; // id of the comment being edited
+let keyView = false; // the answer key is showing beside the student's page
+const keyPages = new Map(); // problem id -> which answer key page to show beside it
 let comments = new Map(); // comment id -> comment
 const graded = new Set(); // "submissionId:problemId"
 
@@ -17,6 +19,7 @@ const mappedPage = (s = sub(), p = problem()) => s.page_map[p.page];
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const sheet = $('#sheet');
 const img = $('#page');
+const keyImg = $('#key-page');
 
 function indexComments() {
   comments = new Map(G.problems.flatMap((p) => p.comments.map((c) => [c.id, c])));
@@ -44,6 +47,45 @@ function notice(text) {
   noticeTimer = setTimeout(() => { $('#notice').textContent = ''; }, 3000);
 }
 
+// ------------------------------------------------------------------ answer key
+
+// A key usually runs page for page with the blank test, so a problem starts on the key page that
+// sits where the problem does, clamped to the key's last page. Keys of another length need the
+// Prev/Next buttons; where they are put is kept per problem, so it is set once while grading it.
+function keyPage(p = problem()) {
+  const chosen = keyPages.get(p.id);
+  return chosen !== undefined ? chosen : clamp(p.page, 0, G.answer_key_pages - 1);
+}
+
+function turnKeyPage(delta) {
+  const p = problem();
+  keyPages.set(p.id, clamp(keyPage(p) + delta, 0, G.answer_key_pages - 1));
+  render();
+}
+
+function toggleKey() {
+  if (!G.answer_key) return;
+  keyView = !keyView;
+  render();
+}
+
+function renderKey() {
+  const on = keyView && !!G.answer_key;
+  const button = $('#answer-key');
+  button.hidden = !G.answer_key;
+  button.classList.toggle('on', on);
+  button.title = `${on ? 'Hide' : 'Show'} the answer key (a)`;
+  $('#key-sheet').hidden = !on;
+  $('#key-controls').hidden = !on;
+  if (!on) return;
+  const index = keyPage();
+  $('#key-label').textContent = `Key page ${index + 1}/${G.answer_key_pages}`;
+  $('#key-prev').disabled = index === 0;
+  $('#key-next').disabled = index === G.answer_key_pages - 1;
+  const src = pageUrl(G.answer_key, index);
+  if (keyImg.getAttribute('src') !== src) keyImg.src = src;
+}
+
 // ------------------------------------------------------------------ rendering
 
 function render() {
@@ -64,6 +106,7 @@ function render() {
   $('#prev-page').disabled = page === 0;
   $('#next-page').disabled = page === s.page_count - 1;
 
+  renderKey();
   renderAnnotations();
   renderScore();
   renderComments();
@@ -194,6 +237,7 @@ function preload(p) {
     const s = G.submissions[j];
     if (s) new Image().src = pageSrc(s, mappedPage(s, p));
   }
+  if (G.answer_key) new Image().src = pageUrl(G.answer_key, keyPage(p));
 }
 
 // ------------------------------------------------------------------ placing comments
@@ -401,6 +445,9 @@ $('#prev-sub').addEventListener('click', () => go(sidx - 1));
 $('#next-sub').addEventListener('click', () => go(sidx + 1));
 $('#prev-page').addEventListener('click', () => { page = Math.max(0, page - 1); render(); });
 $('#next-page').addEventListener('click', () => { page = Math.min(sub().page_count - 1, page + 1); render(); });
+$('#answer-key').addEventListener('click', toggleKey);
+$('#key-prev').addEventListener('click', () => turnKeyPage(-1));
+$('#key-next').addEventListener('click', () => turnKeyPage(1));
 
 document.addEventListener('keydown', (e) => {
   if (!G || !G.submissions.length || !G.problems.length) return;
@@ -415,6 +462,9 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'Enter') {
     e.preventDefault();
     next();
+  } else if (e.key === 'a' || e.key === 'A') {
+    e.preventDefault();
+    toggleKey();
   } else if (/^[1-9]$/.test(e.key)) {
     const c = problem().comments[parseInt(e.key, 10) - 1];
     if (c) placeAtDefault(c);

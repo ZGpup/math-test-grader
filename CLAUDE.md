@@ -14,7 +14,7 @@ uv run grader --port 8001 --no-browser
 All user data (database, uploaded PDFs, rendered pages, exports) lives in `./data/`, which is gitignored.
 Set `GRADER_DATA=/some/dir` to use another location.
 
-Fake data to try it out, written to `data/fixtures/` (blank test, 15-page scan, 30-page duplex scan, roster):
+Fake data to try it out, written to `data/fixtures/` (blank test, answer key, 15-page scan, 30-page duplex scan, roster):
 
 ```sh
 uv run python scripts/make_fixture.py
@@ -30,6 +30,7 @@ uv run pytest
 
 1. Home: add a course, then paste the roster (one student per line, `First Last` or `Last, First`).
 2. Add an assignment, upload the blank test, and set the cover page plus each problem's label and points.
+   Optionally upload an answer key.
 3. Upload scan PDFs with the pages per test, and check the problem-to-scan-page mapping.
 4. Organize pages: one column per test. Drag a misfed page to its slot, turn the ones that came out
    upside down or mirrored, then press "Order is correct".
@@ -37,7 +38,7 @@ uv run pytest
 6. Grade: pick a problem, place rubric comments on each student's page, press Enter for the next student.
 7. Results: review the table, download the CSV, export annotated PDFs.
 
-Keyboard: grading uses `←`/`→` to change students, `1`–`9` to apply a comment, and `Enter` for Next. Matching uses typing to filter the roster, `Enter` to assign the top match, and `↑`/`↓` to change tests.
+Keyboard: grading uses `←`/`→` to change students, `1`–`9` to apply a comment, `a` to show the answer key beside the work, and `Enter` for Next. Matching uses typing to filter the roster, `Enter` to assign the top match, and `↑`/`↓` to change tests.
 
 ## Layout
 
@@ -60,6 +61,12 @@ Storage
 Blank test
 - New problems default to 10 points and number themselves in page order. Changing the cover turns the old cover page into "none". To make the cover a problem or "none", pick another cover first.
 - You can't replace the blank test while scans exist (delete the scans first), because the page mappings depend on its page count.
+
+Answer key
+- Optional, one per assignment, stored like the blank test (`uploads/<key>.pdf`, `pages/<key>/`). Any page count, and it does not need the blank test first: nothing depends on the key, so there is nothing to keep in step with it.
+- A problem starts on the key page sitting where the problem sits in the test, clamped to the key's last page. That is the whole mapping when the key runs page for page with the test, cover included, which is the usual case. Otherwise it is a starting point: "Prev"/"Next" move the key's pages while grading, and where you leave them is kept per problem, so a key of another shape is lined up once per problem and then follows you from student to student. It is screen state, not stored, so a reload starts over.
+- A new blank test clears the answer key, the way it clears the problems, because the key answered the old test.
+- While grading, "Answer key" (`a`) puts the key beside the student's work, each page taking half the room. Annotation sizes are container units of their own sheet, so the boxes stay true to the page at any width and exported PDFs still match. The key pane is only a picture: comments are placed on the student's page as usual, whether the key is up or not.
 
 Scans
 - The problem-to-scan-page mapping is stored per blank page (cover included), so changing problem labels or points never loses it. When pages per test is neither equal to nor double the blank page count, the mapping table opens with a one-to-one default (clamped to the last scan page).
