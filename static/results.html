@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Results</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/vendor/katex/katex.min.js" defer></script>
+<script src="/js/common.js" defer></script>
+<script src="/js/results.js" defer></script>
+</head>
+<body>
+<header id="top"></header>
+<main class="wide">
+  <div class="row">
+    <h1>Results</h1>
+    <span class="legend muted"><span class="swatch"></span> Ungraded</span>
+    <span class="spacer"></span>
+    <a class="btn" id="csv">Download CSV</a>
+    <button id="export" class="primary">Export PDFs</button>
+  </div>
+  <div class="row" id="export-status" style="margin-top: 8px; justify-content: flex-end"></div>
+  <table class="grid results" id="results" style="margin-top: 12px"></table>
+</main>
+</body>
+</html>

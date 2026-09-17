@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grade</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/vendor/katex/katex.min.js" defer></script>
+<script src="/js/common.js" defer></script>
+<script src="/js/grade.js" defer></script>
+</head>
+<body class="app">
+<header id="top"></header>
+<div class="toolbar">
+  <div id="tabs" class="tabs"></div>
+  <span class="spacer"></span>
+  <span id="progress" class="muted"></span>
+</div>
+<div class="toolbar">
+  <button id="prev-sub">Prev student</button>
+  <span id="student" class="student"></span>
+  <span id="position" class="muted"></span>
+  <button id="next-sub">Next student</button>
+  <span id="notice" class="notice"></span>
+  <span class="spacer"></span>
+  <button id="prev-page">Prev page</button>
+  <span id="page-label" class="muted"></span>
+  <button id="next-page">Next page</button>
+</div>
+<div class="workspace">
+  <div class="viewer">
+    <div class="sheet" id="sheet"><img id="page" alt="" draggable="false"></div>
+  </div>
+  <aside class="sidebar">
+    <div class="score-row">
+      <span id="score" class="score"></span>
+      <button id="graded-state" class="graded-state"></button>
+    </div>
+    <button id="next" class="primary wide">Next</button>
+    <h3>Comments</h3>
+    <ol id="comments" class="comment-list"></ol>
+    <form id="new-comment" class="comment-form" style="margin-top: 10px">
+      <input type="text" id="nc-text" placeholder="New comment" autocomplete="off" spellcheck="false">
+      <div id="nc-preview" class="preview"></div>
+      <div class="row">
+        <label>Deduction <input type="number" id="nc-ded" min="0" step="any" value="0"></label>
+        <span class="spacer"></span>
+        <button class="primary">Add</button>
+      </div>
+    </form>
+  </aside>
+</div>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Course</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/vendor/katex/katex.min.js" defer></script>
+<script src="/js/common.js" defer></script>
+<script src="/js/course.js" defer></script>
+</head>
+<body>
+<header id="top"></header>
+<main class="wide" style="max-width: 1300px">
+  <div class="title-row">
+    <input id="name" class="title" autocomplete="off">
+    <span class="spacer"></span>
+    <button id="delete">Delete course</button>
+  </div>
+  <div class="two-col">
+    <section>
+      <h2>Roster <span id="roster-count" class="muted"></span></h2>
+      <div class="roster-edit">
+        <textarea id="roster" spellcheck="false" placeholder="First Last&#10;Last, First"></textarea>
+        <table class="grid compact" id="students">
+          <thead><tr><th class="num">#</th><th>First name</th><th>Last name</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <section>
+      <h2>Assignments</h2>
+      <table class="grid" id="assignments" style="width: 100%">
+        <thead><tr><th>Assignment</th><th class="num">Points</th><th class="num">Tests</th><th class="num">Matched</th><th class="num">Graded</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <form id="add-assignment" class="inline">
+        <input id="assignment-name" placeholder="Assignment name" autocomplete="off" required>
+        <button class="primary">Add assignment</button>
+      </form>
+    </section>
+  </div>
+</main>
+</body>
+</html>

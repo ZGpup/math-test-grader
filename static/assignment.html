@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assignment</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/vendor/katex/katex.min.js" defer></script>
+<script src="/js/common.js" defer></script>
+<script src="/js/assignment.js" defer></script>
+</head>
+<body>
+<header id="top"></header>
+<main class="wide">
+  <div class="title-row">
+    <input id="name" class="title" autocomplete="off">
+    <span class="spacer"></span>
+    <button id="delete">Delete assignment</button>
+  </div>
+
+  <section>
+    <h2>Blank test</h2>
+    <div class="row">
+      <label class="btn file-btn" id="blank-button">Upload PDF<input type="file" id="blank-file" accept="application/pdf,.pdf"></label>
+      <span id="blank-status" class="muted"></span>
+      <span class="spacer"></span>
+      <strong id="total-points"></strong>
+    </div>
+    <div id="pages" class="pages"></div>
+  </section>
+
+  <section>
+    <h2>Scans</h2>
+    <div id="scans">
+      <div class="row">
+        <label class="btn file-btn" id="scan-button">Add PDFs<input type="file" id="scan-files" accept="application/pdf,.pdf" multiple></label>
+        <span id="scan-status" class="muted"></span>
+      </div>
+      <div id="pending" class="pending"></div>
+      <div id="batches"></div>
+    </div>
+  </section>
+
+  <section class="actions">
+    <h2>Grading</h2>
+    <div class="row">
+      <span><a class="btn primary" id="go-match">Match names</a><span id="matched"></span></span>
+      <span><a class="btn primary" id="go-grade">Grade</a><span id="graded"></span></span>
+      <span><a class="btn primary" id="go-results">Results</a></span>
+    </div>
+    <div id="count-warning" class="row" style="margin-top: 10px"></div>
+  </section>
+</main>
+</body>
+</html>
