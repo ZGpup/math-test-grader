@@ -31,7 +31,8 @@ packages = ["app"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = [
-    # Emitted by PyMuPDF's SWIG bindings on import.
+    # Third-party deprecations outside this project's control.
     "ignore:builtin type Swig:DeprecationWarning",
     "ignore:builtin type swigvarlink:DeprecationWarning",
+    "ignore:The anyio.abc.BlockingPortal alias:DeprecationWarning",
 ]

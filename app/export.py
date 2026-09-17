@@ -169,6 +169,7 @@ def _render_line(tokens: list[tuple[str, str, bool]], prop: FontProperties) -> t
     is_math = any(t[2] for t in tokens)
     escaped = "".join(t[1] for t in tokens)
     width, height, depth, *_ = _parser.parse(escaped, dpi=72, prop=prop)
+    width = max(width, 1.0)
     height = max(height, prop.get_size() * 1.15)
     fig = Figure(figsize=(width / 72, height / 72))
     FigureCanvasAgg(fig)

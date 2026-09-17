@@ -55,10 +55,10 @@ def test_deductions_and_propagation(client, assignment):
     assert scores(client, aid) == [[1, 10, 10, 10], [10, 10, 10, 10], [10, 6, 10, 10]]
 
 
-def test_negative_deduction_rejected(client, assignment):
+def test_invalid_comments_rejected(client, assignment):
     p1 = assignment["problems"][0]["id"]
-    r = client.post(f"/api/problems/{p1}/comments", json={"text": "x", "deduction": -1})
-    assert r.status_code == 422
+    assert client.post(f"/api/problems/{p1}/comments", json={"text": "x", "deduction": -1}).status_code == 422
+    assert client.post(f"/api/problems/{p1}/comments", json={"text": "  "}).status_code == 422
 
 
 def test_graded_status(client, assignment):
