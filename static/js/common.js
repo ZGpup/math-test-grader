@@ -130,8 +130,11 @@ function pageUrl(key, index, thumb = false) {
 }
 
 // A test's page at a page offset: which scan page it is and how it was turned on the organize screen.
+// Falls back to plain scan order, so a test without a stored page list still shows its pages.
 function pageAt(s, offset) {
-  return s.pages[Math.max(0, Math.min(offset, s.pages.length - 1))];
+  const pages = s.pages || [];
+  return pages[Math.max(0, Math.min(offset, pages.length - 1))]
+    || { scan_page: s.first_page + offset, upside_down: 0, mirrored: 0 };
 }
 
 function pageSrc(s, offset, thumb = false) {

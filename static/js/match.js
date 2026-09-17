@@ -135,6 +135,13 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// Matches and the roster change while grading in another tab or after navigating back.
+// The URL carries the current test, so reloading keeps the screen where it was.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && M) load();
+});
+window.addEventListener('pageshow', (e) => { if (e.persisted) load(); });
+
 async function load() {
   M = await GET(`/api/assignments/${assignmentId}/submissions`);
   header(assignmentCrumbs(M, 'Match names'));

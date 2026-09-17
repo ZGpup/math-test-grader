@@ -76,7 +76,6 @@ function renderTabs() {
     return h('button', { class: p.id === pid ? 'active' : '', title: `Problem ${p.label}`, onclick: () => selectProblem(p.id) },
       p.label, h('span', { class: 'count' }, `${done}/${n}`));
   }));
-  $('#progress').textContent = `Graded ${graded.size}/${n * G.problems.length}`;
 }
 
 function renderScore() {
