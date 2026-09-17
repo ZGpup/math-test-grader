@@ -231,6 +231,7 @@ button.wide { display: block; width: 100%; margin-top: 8px; padding: 6px; }
 .comment-list .key { color: var(--faint); font-size: 13px; padding-top: 2px; }
 .comment-list .text { overflow-wrap: break-word; }
 .comment-list .ded { font-weight: bold; white-space: nowrap; }
+.ded.bonus { color: var(--accent); }  /* a comment that gives points back */
 .comment-list .tools { grid-column: 2 / 4; display: none; gap: 6px; }
 .comment-list li:hover .tools { display: flex; }
 .comment-form { display: grid; gap: 6px; }

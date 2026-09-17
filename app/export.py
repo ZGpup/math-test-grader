@@ -183,8 +183,8 @@ def _render_line(tokens: list[tuple[str, str, bool]], prop: FontProperties) -> t
 def render_label(text: str, deduction: float, font_size: float, max_width: float) -> list[tuple[bytes, float, float]]:
     prop = _prop(font_size)
     tokens = _tokens(text, prop)
-    if deduction > 0:
-        d = f" $-{fmt_num(deduction)}$"
+    if deduction:
+        d = f" ${'-' if deduction > 0 else '+'}{fmt_num(abs(deduction))}$"
         tokens.append((d, d, True))
     if not tokens:
         tokens = [(" ", " ", False)]

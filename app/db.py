@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS comments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     problem_id INTEGER NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
     text TEXT NOT NULL,
-    deduction REAL NOT NULL DEFAULT 0 CHECK (deduction >= 0),
+    deduction REAL NOT NULL DEFAULT 0,     -- points off; negative adds points (bonus)
     position INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS annotations (
@@ -113,8 +113,32 @@ def connect() -> sqlite3.Connection:
     return conn
 
 
+COMMENTS_REBUILD = """
+CREATE TABLE comments_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    problem_id INTEGER NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    deduction REAL NOT NULL DEFAULT 0,
+    position INTEGER NOT NULL
+);
+INSERT INTO comments_new (id, problem_id, text, deduction, position)
+    SELECT id, problem_id, text, deduction, position FROM comments;
+DROP TABLE comments;
+ALTER TABLE comments_new RENAME TO comments;
+CREATE INDEX IF NOT EXISTS idx_comments_problem ON comments(problem_id);
+"""
+
+
 def migrate(conn: sqlite3.Connection) -> None:
     """Bring a database written by an older version up to date. A new one needs nothing."""
+    comments_sql = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'comments'").fetchone()
+    if comments_sql and "CHECK" in comments_sql[0]:
+        # Drop the "deduction >= 0" check so a comment can add points. SQLite only lets you
+        # do that by rebuilding the table, and the rebuild must not cascade into annotations.
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.executescript(COMMENTS_REBUILD)
+        conn.execute("PRAGMA foreign_keys = ON")
     if "checked" not in {r["name"] for r in conn.execute("PRAGMA table_info(batches)")}:
         conn.execute("ALTER TABLE batches ADD COLUMN checked INTEGER NOT NULL DEFAULT 0")
         # Scans uploaded before there was a page order screen count as already checked.
@@ -324,6 +348,7 @@ def problems(conn: sqlite3.Connection, assignment_id: int) -> list[dict]:
 
 
 def problem_score(max_points: float, deductions: list[float]) -> float:
+    """A negative deduction is a bonus, so a score can pass max_points. It never goes below 0."""
     return round(max(0.0, max_points - sum(deductions)), 6)
 
 

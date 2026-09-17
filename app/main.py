@@ -181,12 +181,12 @@ class MatchIn(BaseModel):
 
 class CommentIn(BaseModel):
     text: str = Field(min_length=1, pattern=r"\S")
-    deduction: float = Field(0, ge=0)
+    deduction: float = Field(0, allow_inf_nan=False)  # negative adds points
 
 
 class CommentPatch(BaseModel):
     text: str | None = Field(None, min_length=1, pattern=r"\S")
-    deduction: float | None = Field(None, ge=0)
+    deduction: float | None = Field(None, allow_inf_nan=False)
 
 
 class AnnotationIn(BaseModel):

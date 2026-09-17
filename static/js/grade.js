@@ -9,6 +9,7 @@ let editing = null; // id of the comment being edited
 let comments = new Map(); // comment id -> comment
 const graded = new Set(); // "submissionId:problemId"
 
+const DED_HINT = 'Points taken off. A negative number gives points instead, for bonus questions.';
 const key = (sid, problemId) => `${sid}:${problemId}`;
 const problem = () => G.problems.find((p) => p.id === pid);
 const sub = () => G.submissions[sidx];
@@ -88,9 +89,14 @@ function renderScore() {
   $('#graded-state').title = isGraded ? 'Mark ungraded' : 'Mark graded';
 }
 
+// Points off, or points on when the deduction is negative.
+function points(d) {
+  return d > 0 ? `−${fmt(d)}` : `+${fmt(-d)}`;
+}
+
 function annContent(c) {
   const box = tex('div', c.text, { class: 'ann' });
-  if (c.deduction > 0) box.append(h('span', { class: 'ded' }, `−${fmt(c.deduction)}`));
+  if (c.deduction) box.append(h('span', { class: c.deduction < 0 ? 'ded bonus' : 'ded' }, points(c.deduction)));
   return box;
 }
 
@@ -136,7 +142,7 @@ function commentRow(c, i, applied) {
   const li = h('li', { class: applied ? 'applied' : '', draggable: true },
     h('span', { class: 'key' }, i < 9 ? i + 1 : ''),
     tex('span', c.text, { class: 'text' }),
-    h('span', { class: 'ded' }, c.deduction > 0 ? `−${fmt(c.deduction)}` : ''),
+    h('span', { class: c.deduction < 0 ? 'ded bonus' : 'ded' }, c.deduction ? points(c.deduction) : ''),
     h('span', { class: 'tools' },
       h('button', { class: 'link', onclick: (e) => { e.stopPropagation(); editing = c.id; renderComments(); } }, 'Edit'),
       h('button', { class: 'link', onclick: (e) => { e.stopPropagation(); deleteComment(c); } }, 'Delete')));
@@ -155,7 +161,7 @@ function usesOf(c) {
 function editRow(c) {
   const text = h('input', { type: 'text', value: c.text, autocomplete: 'off', spellcheck: 'false' });
   const preview = h('div', { class: 'preview' });
-  const ded = h('input', { type: 'number', min: '0', step: 'any', value: String(c.deduction) });
+  const ded = h('input', { type: 'number', step: 'any', value: String(c.deduction), title: DED_HINT });
   const uses = usesOf(c);
   text.addEventListener('input', () => renderTex(preview, text.value));
   renderTex(preview, c.text);
@@ -163,7 +169,7 @@ function editRow(c) {
   const form = h('form', { class: 'comment-form' },
     text, preview,
     h('div', { class: 'row' },
-      h('label', {}, 'Deduction ', ded),
+      h('label', { title: DED_HINT }, 'Points off ', ded),
       uses ? h('span', { class: 'muted' }, `Used on ${uses}`) : null,
       h('span', { class: 'spacer' }),
       h('button', { type: 'button', onclick: cancel }, 'Cancel'),
@@ -171,7 +177,7 @@ function editRow(c) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const deduction = parseFloat(ded.value || '0');
-    if (!text.value.trim() || !(deduction >= 0)) return showError('Text and a deduction of 0 or more are required');
+    if (!text.value.trim() || !Number.isFinite(deduction)) return showError('A comment needs text and a number of points');
     await PATCH(`/api/comments/${c.id}`, { text: text.value.trim(), deduction });
     c.text = text.value.trim();
     c.deduction = deduction;
@@ -325,7 +331,7 @@ $('#new-comment').addEventListener('submit', async (e) => {
   const text = $('#nc-text').value.trim();
   const deduction = parseFloat($('#nc-ded').value || '0');
   if (!text) return;
-  if (!(deduction >= 0)) return showError('Deduction must be 0 or more');
+  if (!Number.isFinite(deduction)) return showError('Points off must be a number');
   const p = problem();
   const c = await POST(`/api/problems/${p.id}/comments`, { text, deduction });
   p.comments.push(c);
