@@ -70,7 +70,7 @@ Roster and matching
 - A student can be matched to at most one test per assignment. Clicking an already-matched student moves them to the current test.
 
 Grading
-- A comment counts once per submission, even when placed more than once or on several pages. Placing it on a page's back doesn't double-deduct.
+- Every placement of a comment deducts, so placing "Incorrect (−1)" on three T/F answers takes off 3 points.
 - "Graded" is only a status flag, set by Next (click it in the sidebar to toggle). Results and the CSV always use the current computed scores; ungraded cells are striped in the results table.
 - An annotation's (x, y) is the top-left corner of its box. Box font size is 1.6% of page width and max width is 35%, both on screen (CSS container units) and in the export, so exported PDFs match the screen.
 - Annotations from other problems on the same page are shown faded and can't be edited.

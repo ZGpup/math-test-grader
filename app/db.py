@@ -249,13 +249,13 @@ def problem_score(max_points: float, deductions: list[float]) -> float:
 def score_table(conn: sqlite3.Connection, assignment_id: int) -> dict[tuple[int, int], float]:
     """Score for every (submission_id, problem_id) of an assignment.
 
-    Each comment counts once per submission, even if it is placed several times.
+    Each placement of a comment deducts, so a comment placed three times deducts three times.
     """
     applied: dict[tuple[int, int], list[float]] = {}
     rows = conn.execute(
-        """SELECT u.submission_id, c.problem_id, c.deduction
-           FROM (SELECT DISTINCT submission_id, comment_id FROM annotations) u
-           JOIN comments c ON c.id = u.comment_id
+        """SELECT a.submission_id, c.problem_id, c.deduction
+           FROM annotations a
+           JOIN comments c ON c.id = a.comment_id
            JOIN problems p ON p.id = c.problem_id
            WHERE p.assignment_id = ?""",
         (assignment_id,),

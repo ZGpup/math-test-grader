@@ -39,9 +39,9 @@ def test_deductions_and_propagation(client, assignment):
     place(client, s1, big)
     assert scores(client, aid)[0] == [0, 10, 10, 10]
 
-    # A comment placed twice on one submission deducts once.
+    # A comment placed twice on one submission deducts twice.
     place(client, s2, sign, x=0.1, y=0.9)
-    assert scores(client, aid)[1] == [6.5, 10, 10, 10]
+    assert scores(client, aid)[1] == [3, 10, 10, 10]
 
     # Comments only affect their own problem.
     other = add_comment(client, p2, "Arithmetic", 4)

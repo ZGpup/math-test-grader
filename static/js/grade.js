@@ -25,11 +25,12 @@ function appliedComments(s) {
   return new Set(G.annotations.filter((a) => a.submission_id === s.id).map((a) => a.comment_id));
 }
 
-// Same rule as app/db.py score_table: each comment counts once per submission.
+// Same rule as app/db.py score_table: each placement of a comment deducts.
 function scoreFor(s, p) {
   let deduction = 0;
-  for (const id of appliedComments(s)) {
-    const c = comments.get(id);
+  for (const a of G.annotations) {
+    if (a.submission_id !== s.id) continue;
+    const c = comments.get(a.comment_id);
     if (c && c.problem_id === p.id) deduction += c.deduction;
   }
   return Math.max(0, p.max_points - deduction);
