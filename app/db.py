@@ -101,6 +101,11 @@ def data_dir() -> Path:
     return path
 
 
+def rendered_pages(key: str) -> int:
+    """How many pages an upload has, counted from the page images rendered for it."""
+    return sum(1 for p in (data_dir() / "pages" / key).glob("*.png") if p.stem.isdigit())
+
+
 def connect() -> sqlite3.Connection:
     path = data_dir() / "grader.db"
     conn = sqlite3.connect(path)
@@ -146,6 +151,11 @@ def migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE assignments ADD COLUMN answer_key TEXT")
     if "answer_key_pages" not in columns:
         conn.execute("ALTER TABLE assignments ADD COLUMN answer_key_pages INTEGER NOT NULL DEFAULT 0")
+        # A key uploaded before the count was stored would otherwise read as having no pages.
+        for a in conn.execute("SELECT id, answer_key FROM assignments WHERE answer_key IS NOT NULL").fetchall():
+            conn.execute(
+                "UPDATE assignments SET answer_key_pages = ? WHERE id = ?", (rendered_pages(a["answer_key"]), a["id"])
+            )
     if "checked" not in {r["name"] for r in conn.execute("PRAGMA table_info(batches)")}:
         conn.execute("ALTER TABLE batches ADD COLUMN checked INTEGER NOT NULL DEFAULT 0")
         # Scans uploaded before there was a page order screen count as already checked.

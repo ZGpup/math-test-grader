@@ -102,3 +102,36 @@ def test_deleting_the_assignment_removes_the_answer_key_files(client, fixtures):
     key = upload(client, f"/api/assignments/{aid}/answer_key", fixtures["key"])["answer_key"]
     client.delete(f"/api/assignments/{aid}")
     assert key_files(key) == (False, False)
+
+
+# The assignments table as the first version with an answer key wrote it: no page count.
+OLD_ASSIGNMENTS = """
+CREATE TABLE old (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    blank_key TEXT,
+    blank_pages INTEGER NOT NULL DEFAULT 0,
+    cover_page INTEGER NOT NULL DEFAULT 0,
+    answer_key TEXT
+);
+INSERT INTO old SELECT id, course_id, name, blank_key, blank_pages, cover_page, answer_key FROM assignments;
+DROP TABLE assignments;
+ALTER TABLE old RENAME TO assignments;
+"""
+
+
+def test_migrate_counts_the_pages_of_a_key_uploaded_before_the_count_was_stored(client, fixtures):
+    aid = new_assignment(client, fixtures)
+    detail = upload(client, f"/api/assignments/{aid}/answer_key", fixtures["key"])
+    assert detail["answer_key_pages"] == 5
+
+    with db.session() as conn:
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys = OFF")  # the rebuild must not cascade into problems
+        conn.executescript(OLD_ASSIGNMENTS)
+    db._initialized.clear()  # so the next connection migrates again
+    with db.session() as conn:
+        pages = conn.execute("SELECT answer_key_pages FROM assignments WHERE id = ?", (aid,)).fetchone()[0]
+    assert pages == 5, "the count comes back from the pages already rendered, not as 0"
+    assert client.get(f"/api/assignments/{aid}").json()["answer_key_pages"] == 5

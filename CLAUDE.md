@@ -64,9 +64,11 @@ Blank test
 
 Answer key
 - Optional, one per assignment, stored like the blank test (`uploads/<key>.pdf`, `pages/<key>/`). Any page count, and it does not need the blank test first: nothing depends on the key, so there is nothing to keep in step with it.
-- A problem starts on the key page sitting where the problem sits in the test, clamped to the key's last page. That is the whole mapping when the key runs page for page with the test, cover included, which is the usual case. Otherwise it is a starting point: "Prev"/"Next" move the key's pages while grading, and where you leave them is kept per problem, so a key of another shape is lined up once per problem and then follows you from student to student. It is screen state, not stored, so a reload starts over.
+- `answer_key_pages` is stored because the whole key is laid out at once. `db.migrate` fills it in for a key uploaded before it existed by counting that key's rendered page images, so an old key does not come back as a key of no pages.
 - A new blank test clears the answer key, the way it clears the problems, because the key answered the old test.
-- While grading, "Answer key" (`a`) puts the key beside the student's work, each page taking half the room. Annotation sizes are container units of their own sheet, so the boxes stay true to the page at any width and exported PDFs still match. The key pane is only a picture: comments are placed on the student's page as usual, whether the key is up or not.
+- While grading, "Answer key" (`a`) opens the key as a third column beside the student's work, holding every key page and scrolling on its own, so reading the key never moves the student's page. Annotation sizes are container units of their own sheet, so the boxes stay true to the page at half the width and exported PDFs still match. The column is only a picture: comments are placed on the student's page as usual, open or closed.
+- The column scrolls to the key page sitting where the problem sits in the test, clamped to the key's last page, when it opens and when the problem changes. Changing student leaves it alone, and so does scrolling it yourself. A key of another shape is therefore read by scrolling, with no mapping to set anywhere.
+- The key's images are fetched when the grading screen loads, though the column starts closed: a page with no image has no height, and scrolling to one of them would land nowhere.
 
 Scans
 - The problem-to-scan-page mapping is stored per blank page (cover included), so changing problem labels or points never loses it. When pages per test is neither equal to nor double the blank page count, the mapping table opens with a one-to-one default (clamped to the last scan page).

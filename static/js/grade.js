@@ -6,8 +6,8 @@ let pid = null; // current problem id
 let sidx = 0; // current submission index
 let page = 0; // page offset within the current submission
 let editing = null; // id of the comment being edited
-let keyView = false; // the answer key is showing beside the student's page
-const keyPages = new Map(); // problem id -> which answer key page to show beside it
+let keyView = false; // the answer key column is open beside the student's page
+let keyScrolledFor = null; // the problem the key column was last scrolled to
 let comments = new Map(); // comment id -> comment
 const graded = new Set(); // "submissionId:problemId"
 
@@ -19,7 +19,7 @@ const mappedPage = (s = sub(), p = problem()) => s.page_map[p.page];
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const sheet = $('#sheet');
 const img = $('#page');
-const keyImg = $('#key-page');
+const keyViewer = $('#key-viewer');
 
 function indexComments() {
   comments = new Map(G.problems.flatMap((p) => p.comments.map((c) => [c.id, c])));
@@ -49,41 +49,50 @@ function notice(text) {
 
 // ------------------------------------------------------------------ answer key
 
-// A key usually runs page for page with the blank test, so a problem starts on the key page that
-// sits where the problem does, clamped to the key's last page. Keys of another length need the
-// Prev/Next buttons; where they are put is kept per problem, so it is set once while grading it.
-function keyPage(p = problem()) {
-  const chosen = keyPages.get(p.id);
-  return chosen !== undefined ? chosen : clamp(p.page, 0, G.answer_key_pages - 1);
+// The key is a column of its own that scrolls beside the student's work: every page is there, so
+// a key of any length is read by scrolling. The pages are built once, when the screen loads, and
+// their images are fetched right away even though the column starts closed -- a page with no image
+// yet has no height, and scrolling to one of them would land nowhere.
+const hasKey = () => !!G.answer_key && G.answer_key_pages > 0;
+
+function buildKeyPages() {
+  if (!hasKey()) return;
+  $('#key-pages').replaceChildren(...Array.from({ length: G.answer_key_pages }, (_, i) =>
+    h('div', { class: 'sheet key-sheet' },
+      h('img', { src: pageUrl(G.answer_key, i), alt: '', draggable: false }),
+      h('div', { class: 'key-cap' }, `p. ${i + 1}`))));
 }
 
-function turnKeyPage(delta) {
-  const p = problem();
-  keyPages.set(p.id, clamp(keyPage(p) + delta, 0, G.answer_key_pages - 1));
-  render();
+// A key usually runs page for page with the blank test, so a problem's answers are on the key page
+// sitting where the problem does, clamped to the key's last page. That is where the column scrolls
+// to when the key opens and when the problem changes; scrolling it by hand is left alone.
+function scrollKeyToProblem() {
+  const target = $('#key-pages').children[clamp(problem().page, 0, G.answer_key_pages - 1)];
+  if (target) target.scrollIntoView({ block: 'start' });
 }
 
 function toggleKey() {
-  if (!G.answer_key) return;
+  if (!hasKey()) return;
   keyView = !keyView;
   render();
 }
 
 function renderKey() {
-  const on = keyView && !!G.answer_key;
+  const on = keyView && hasKey();
   const button = $('#answer-key');
-  button.hidden = !G.answer_key;
+  button.hidden = !hasKey();
   button.classList.toggle('on', on);
   button.title = `${on ? 'Hide' : 'Show'} the answer key (a)`;
-  $('#key-sheet').hidden = !on;
-  $('#key-controls').hidden = !on;
-  if (!on) return;
-  const index = keyPage();
-  $('#key-label').textContent = `Key page ${index + 1}/${G.answer_key_pages}`;
-  $('#key-prev').disabled = index === 0;
-  $('#key-next').disabled = index === G.answer_key_pages - 1;
-  const src = pageUrl(G.answer_key, index);
-  if (keyImg.getAttribute('src') !== src) keyImg.src = src;
+  keyViewer.hidden = !on;
+  $('#workspace').classList.toggle('with-key', on);
+  if (!on) {
+    keyScrolledFor = null;
+    return;
+  }
+  if (keyScrolledFor !== pid) {
+    scrollKeyToProblem();
+    keyScrolledFor = pid;
+  }
 }
 
 // ------------------------------------------------------------------ rendering
@@ -237,7 +246,6 @@ function preload(p) {
     const s = G.submissions[j];
     if (s) new Image().src = pageSrc(s, mappedPage(s, p));
   }
-  if (G.answer_key) new Image().src = pageUrl(G.answer_key, keyPage(p));
 }
 
 // ------------------------------------------------------------------ placing comments
@@ -446,8 +454,6 @@ $('#next-sub').addEventListener('click', () => go(sidx + 1));
 $('#prev-page').addEventListener('click', () => { page = Math.max(0, page - 1); render(); });
 $('#next-page').addEventListener('click', () => { page = Math.min(sub().page_count - 1, page + 1); render(); });
 $('#answer-key').addEventListener('click', toggleKey);
-$('#key-prev').addEventListener('click', () => turnKeyPage(-1));
-$('#key-next').addEventListener('click', () => turnKeyPage(1));
 
 document.addEventListener('keydown', (e) => {
   if (!G || !G.submissions.length || !G.problems.length) return;
@@ -483,6 +489,7 @@ async function load() {
     for (const el of document.querySelectorAll('button, input')) el.disabled = true;
     return;
   }
+  buildKeyPages();
   const requestedProblem = parseInt(param('problem'), 10);
   pid = G.problems.some((p) => p.id === requestedProblem) ? requestedProblem : G.problems[0].id;
   const requestedSub = G.submissions.findIndex((s) => String(s.id) === param('sub'));

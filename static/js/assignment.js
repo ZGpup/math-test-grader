@@ -88,20 +88,21 @@ $('#blank-file').addEventListener('change', async (e) => {
 
 // ------------------------------------------------------------------ answer key
 
-// Any page count is fine: grading shows one key page at a time, beside the student's work.
-// A key page starts out beside the problem sitting on the same page of the test, which is the
-// whole story when the two have the same pages, and a starting point otherwise.
+// Any page count is fine: the whole key scrolls beside the student's work while grading, and it
+// opens on the page sitting where the problem sits in the test. A key whose pages are gone counts
+// as no key, so nothing ever reports a page count it doesn't have.
 function renderAnswerKey() {
-  $('#key-button').firstChild.textContent = A.answer_key ? 'Replace PDF' : 'Upload PDF';
-  $('#key-delete').hidden = !A.answer_key;
-  $('#key-status').textContent = A.answer_key
+  const hasKey = A.answer_key && A.answer_key_pages > 0;
+  $('#key-button').firstChild.textContent = hasKey ? 'Replace PDF' : 'Upload PDF';
+  $('#key-delete').hidden = !hasKey;
+  $('#key-status').textContent = hasKey
     ? `${plural(A.answer_key_pages, 'page', 'pages')}, shown beside the student's work while grading`
     : "Optional. Shown beside the student's work while grading";
-  const pages = Array.from({ length: A.answer_key_pages }, (_, i) => keyCard(i));
-  $('#key-pages').replaceChildren(...(A.answer_key ? pages : []));
+  $('#key-pages').replaceChildren(
+    ...(hasKey ? Array.from({ length: A.answer_key_pages }, (_, i) => keyCard(i)) : []));
 }
 
-// What the test has on the same page, which is where this key page starts out while grading.
+// What the test has on the same page, which is where the key opens while grading that problem.
 function answers(index) {
   const p = A.pages[index];
   if (!p) return '';

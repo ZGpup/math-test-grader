@@ -180,12 +180,25 @@ body.app { height: 100vh; display: flex; flex-direction: column; overflow: hidde
 .sheet img { display: block; width: 100%; -webkit-user-drag: none; }
 .sheet.drop-target { outline: 2px solid var(--accent); }
 
-/* The answer key sits beside the student's work, each page taking half the room. Annotation sizes
-   are container units of their own sheet, so they stay true to the page at any width. */
-.sheets { display: flex; align-items: flex-start; justify-content: center; gap: 14px; }
-.sheets .sheet { flex: 1 1 0; min-width: 0; margin: 0; }
-.key-sheet { outline: 2px solid var(--accent); outline-offset: -1px; }
-.key-controls { display: inline-flex; align-items: center; gap: 8px; }
+/* The answer key is a column of its own beside the student's work, holding every key page and
+   scrolling on its own, so the student's page stays put while the key is read. Annotation sizes
+   are container units of their own sheet, so the boxes stay true to the page at half the width. */
+.workspace.with-key { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 350px; }
+.key-viewer { border-left: 1px solid var(--border); padding-top: 0; }
+.key-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 10px;
+  padding: 5px 0;
+  background: var(--bg-sunken);
+  color: var(--accent);
+  font-weight: bold;
+  text-align: center;
+}
+.key-sheet + .key-sheet { margin-top: 14px; }
+.key-sheet { scroll-margin-top: 42px; }  /* scrolled-to pages clear the sticky heading */
+.key-cap { border-top: 1px solid var(--border); padding: 2px 6px; color: var(--muted); font-size: 13px; }
 button#answer-key.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 .tabs { display: flex; gap: 0; flex-wrap: wrap; }

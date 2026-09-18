@@ -39,8 +39,8 @@ uv run pytest
 5. Match names: click the student for each cover page.
 6. Grade: pick a problem, place rubric comments on each student's page, press Enter for the next student.
    A comment's "points off" can be negative, which adds points instead, for bonus questions.
-   "Answer key" puts the key beside the student's work, on the page for that problem; "Prev"/"Next"
-   move through the key if its pages don't line up with the test.
+   "Answer key" opens the key in a column beside the student's work, scrolled to the page for that
+   problem. The column scrolls on its own, so any key can be read without moving the student's page.
 7. Results: review the table, download the CSV, export annotated PDFs.
 
 Keyboard: grading uses `←`/`→` to change students, `1`–`9` to apply a comment, `a` to show the answer key beside the work, and `Enter` for Next. Matching uses typing to filter the roster, `Enter` to assign the top match, and `↑`/`↓` to change tests.
