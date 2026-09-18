@@ -141,9 +141,10 @@ function renderScore() {
   $('#graded-state').title = isGraded ? 'Mark ungraded' : 'Mark graded';
 }
 
-// Points off, or points on when the deduction is negative.
+// Points off, or points on when the deduction is negative. The unit keeps a bare
+// number from reading as part of the comment's math (see .ann .ded, drawn as a superscript).
 function points(d) {
-  return d > 0 ? `−${fmt(d)}` : `+${fmt(-d)}`;
+  return d > 0 ? `−${fmt(d)}pts` : `+${fmt(-d)}pts`;
 }
 
 function annContent(c) {

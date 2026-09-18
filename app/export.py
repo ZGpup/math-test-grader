@@ -184,7 +184,9 @@ def render_label(text: str, deduction: float, font_size: float, max_width: float
     prop = _prop(font_size)
     tokens = _tokens(text, prop)
     if deduction:
-        d = f" ${'-' if deduction > 0 else '+'}{fmt_num(abs(deduction))}$"
+        # A superscript with its unit, like the screen (static/css/style.css .ann .ded),
+        # so it does not read as part of the comment's math.
+        d = f" $^{{{'-' if deduction > 0 else '+'}{fmt_num(abs(deduction))}\\mathrm{{pts}}}}$"
         tokens.append((d, d, True))
     if not tokens:
         tokens = [(" ", " ", False)]

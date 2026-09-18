@@ -222,7 +222,7 @@ button#answer-key.on { background: var(--accent); border-color: var(--accent); c
   overflow-wrap: break-word;
 }
 .ann .katex { font-size: 1em; }
-.ann .ded { margin-left: 0.3em; white-space: nowrap; }
+.ann .ded { margin-left: 0.15em; white-space: nowrap; font-size: 0.7em; vertical-align: super; }
 .ann.other { opacity: 0.45; cursor: default; border-style: dashed; pointer-events: none; }
 .ann.dragging { outline: 1px solid var(--accent); }
 .ann .x {

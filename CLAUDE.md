@@ -90,9 +90,10 @@ Roster and matching
 
 Grading
 - Every placement of a comment deducts, so placing "Incorrect (−1)" on three T/F answers takes off 3 points.
-- "Points off" may be negative, which gives points instead: that is how bonus questions work, usually on a problem worth 0. A problem's score can then pass its own points and a grade can pass 100%, but a score never drops below 0. The comment shows `+2` in accent instead of `−2`, on screen and in the exported PDF. Older databases checked that a deduction was never negative; `db.migrate` rebuilds the comments table to drop that check, with foreign keys off so placed comments survive.
+- "Points off" may be negative, which gives points instead: that is how bonus questions work, usually on a problem worth 0. A problem's score can then pass its own points and a grade can pass 100%, but a score never drops below 0. The comment shows `+2pts` in accent instead of `−2pts`, on screen and in the exported PDF. Older databases checked that a deduction was never negative; `db.migrate` rebuilds the comments table to drop that check, with foreign keys off so placed comments survive.
 - "Graded" is only a status flag, set by Next (click it in the sidebar to toggle). Results and the CSV always use the current computed scores; ungraded cells are striped in the results table.
 - An annotation's (x, y) is the top-left corner of its box. Box font size is 1.6% of page width and max width is 35%, both on screen (CSS container units) and in the export, so exported PDFs match the screen.
+- The points a comment takes or gives are drawn after its text as a superscript carrying its unit (`−2pts`), so a bare number never reads as part of the comment's math. In the export that is a mathtext superscript with the unit upright; in the sidebar list the points sit in their own column, so they stay full size there.
 - Annotations from other problems on the same page are shown faded and can't be edited.
 - A click places a comment at the top right, below any boxes already on the right half of the page.
 
