@@ -10,15 +10,22 @@ dependencies = [
     "python-multipart>=0.0.9",
     "pymupdf>=1.24",
     "matplotlib>=3.8",
+    # The desktop app's window. app/desktop.py imports it lazily and falls back to the browser
+    # without it, so the rest of the project stays importable anywhere.
+    "pywebview>=6",
 ]
 
 [project.scripts]
 grader = "app.main:run"
+grader-desktop = "app.desktop:main"
 
 [dependency-groups]
 dev = [
     "httpx2>=2",
     "pytest>=8",
+]
+build = [
+    "pyinstaller>=6",
 ]
 
 [build-system]

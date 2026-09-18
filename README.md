@@ -27,6 +27,33 @@ Tests:
 uv run pytest
 ```
 
+## Mac app
+
+`Grader.app` opens the same screens in a window of its own rather than a browser tab. It stores data
+in `~/Library/Application Support/MathTestGrader`, takes a port from the OS, and never starts a
+second copy of itself. Closing the window quits. Launches are logged to `grader.log` in the data
+folder. See [PACKAGING.md](PACKAGING.md) for what is still needed before sending it to anyone else
+(signing and notarization).
+
+```sh
+uv run python scripts/make_icon.py                                 # -> Grader.icns (placeholder)
+uv run --group build pyinstaller --noconfirm --clean Grader.spec   # -> dist/Grader.app
+uv run grader-desktop                                              # the same launcher, unfrozen
+```
+
+`--browser` opens the default browser instead of the window, and `--headless` only serves.
+
+On first launch it looks for a checkout's `data/` folder under your home directory and imports it,
+so an existing install keeps its courses, scans and grading. `GRADER_IMPORT_FROM=/some/data` names
+one instead. The import runs only when there is no database yet, and never writes to the source.
+
+The copies are independent once imported: `uv run grader` keeps using `./data/`. To point the dev
+server at the app's data instead:
+
+```sh
+GRADER_DATA=~/Library/"Application Support"/MathTestGrader uv run grader
+```
+
 ## Workflow
 
 1. Home: add a course, then paste the roster (one student per line, `First Last` or `Last, First`).
