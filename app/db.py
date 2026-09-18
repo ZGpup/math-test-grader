@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS assignments (
     blank_pages INTEGER NOT NULL DEFAULT 0,
     cover_page INTEGER NOT NULL DEFAULT 0, -- 0-based blank page index
     answer_key TEXT,                       -- worked solutions, shown beside a student's work
-    answer_key_pages INTEGER NOT NULL DEFAULT 0
+    answer_key_pages INTEGER NOT NULL DEFAULT 0,
+    anonymous INTEGER NOT NULL DEFAULT 0    -- grade without names, in scan order
 );
 CREATE TABLE IF NOT EXISTS problems (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -156,6 +157,9 @@ def migrate(conn: sqlite3.Connection) -> None:
             conn.execute(
                 "UPDATE assignments SET answer_key_pages = ? WHERE id = ?", (rendered_pages(a["answer_key"]), a["id"])
             )
+    if "anonymous" not in columns:
+        # An assignment graded before there was a choice was graded with names, so that stays the default.
+        conn.execute("ALTER TABLE assignments ADD COLUMN anonymous INTEGER NOT NULL DEFAULT 0")
     if "checked" not in {r["name"] for r in conn.execute("PRAGMA table_info(batches)")}:
         conn.execute("ALTER TABLE batches ADD COLUMN checked INTEGER NOT NULL DEFAULT 0")
         # Scans uploaded before there was a page order screen count as already checked.

@@ -293,6 +293,26 @@ async function deleteBatch(b) {
 
 // ------------------------------------------------------------------ actions
 
+// Anonymous grading hides the names on the grading screen and goes through the tests in scan
+// order instead of roster order, which would name them by their place in the queue anyway.
+// It changes nothing about matching, the results table or the exports.
+function renderAnonymous() {
+  $('#anonymous').checked = A.anonymous;
+  $('#anonymous-note').textContent = A.anonymous
+    ? 'Grading shows “Test 1”, “Test 2”… in scan order. Match names, results and exports are unchanged'
+    : 'Hide the names while grading and take the tests in scan order';
+}
+
+$('#anonymous').addEventListener('change', async (e) => {
+  const anonymous = e.target.checked;
+  try {
+    await PATCH(`/api/assignments/${assignmentId}`, { anonymous });
+    A.anonymous = anonymous;
+  } finally {
+    renderAnonymous();
+  }
+});
+
 function renderActions() {
   const p = A.progress;
   // Names and grades hang off page slots, so the page order is settled first.
@@ -327,6 +347,7 @@ function render() {
   renderAnswerKey();
   renderBatches();
   renderPending();
+  renderAnonymous();
   renderActions();
 }
 

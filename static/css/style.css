@@ -71,6 +71,9 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   border-color: var(--accent);
 }
 input[type="number"] { width: 70px; }
+/* Let a checkbox draw itself, in the accent colour; the rule above is meant for text fields. */
+input[type="checkbox"] { width: 15px; height: 15px; padding: 0; margin: 0; border: 0; background: none; accent-color: var(--accent); }
+label.check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 input.title { font-size: 22px; font-weight: bold; border-color: transparent; padding: 2px 4px; margin-left: -5px; min-width: 320px; }
 input.title:hover { border-color: var(--border); }
 

@@ -97,12 +97,19 @@ function renderKey() {
 
 // ------------------------------------------------------------------ rendering
 
+// Anonymous grading sends no names, and the tests come in scan order, so a test is known by its
+// place in that order. An unmatched test still says so: its grade would have nowhere to go.
+function studentLabel() {
+  if (!G.anonymous) return studentName(sub()) || 'Unmatched';
+  return `Test ${sidx + 1}${sub().student_id ? '' : ' (unmatched)'}`;
+}
+
 function render() {
   const p = problem();
   const s = sub();
   history.replaceState(null, '', `?id=${assignmentId}&problem=${pid}&sub=${s.id}`);
   renderTabs();
-  $('#student').textContent = studentName(s) || 'Unmatched';
+  $('#student').textContent = studentLabel();
   $('#student').classList.toggle('muted', !s.student_id);
   $('#position').textContent = `${sidx + 1}/${G.submissions.length}`;
   $('#prev-sub').disabled = sidx === 0;
@@ -483,6 +490,7 @@ document.addEventListener('keydown', (e) => {
 async function load() {
   G = await GET(`/api/assignments/${assignmentId}/grading`);
   header(assignmentCrumbs(G, 'Grade'));
+  $('#anonymous').hidden = !G.anonymous;
   for (const [s, p] of G.graded) graded.add(key(s, p));
   indexComments();
   if (!G.problems.length || !G.submissions.length) {

@@ -126,6 +126,7 @@ def assignment_detail(conn: sqlite3.Connection, assignment_id: int) -> dict:
         "cover_page": a["cover_page"],
         "answer_key": a["answer_key"],
         "answer_key_pages": a["answer_key_pages"],
+        "anonymous": bool(a["anonymous"]),
         "pages": pages,
         "problems": probs,
         "total_points": sum(p["max_points"] for p in probs),
@@ -154,6 +155,11 @@ def submission_assignment(conn: sqlite3.Connection, submission_id: int) -> sqlit
 
 class NameIn(BaseModel):
     name: str = Field(min_length=1)
+
+
+class AssignmentPatch(BaseModel):
+    name: str | None = Field(None, min_length=1)
+    anonymous: bool | None = None
 
 
 class RosterIn(BaseModel):
@@ -309,10 +315,14 @@ def get_assignment(assignment_id: int):
 
 
 @app.patch("/api/assignments/{assignment_id}")
-def rename_assignment(assignment_id: int, body: NameIn):
+def update_assignment(assignment_id: int, body: AssignmentPatch):
+    """Rename the assignment, or turn anonymous grading on or off."""
     with db.session() as conn:
         assignment_row(conn, assignment_id)
-        conn.execute("UPDATE assignments SET name = ? WHERE id = ?", (body.name.strip(), assignment_id))
+        if body.name is not None:
+            conn.execute("UPDATE assignments SET name = ? WHERE id = ?", (body.name.strip(), assignment_id))
+        if body.anonymous is not None:
+            conn.execute("UPDATE assignments SET anonymous = ? WHERE id = ?", (int(body.anonymous), assignment_id))
         return {"ok": True}
 
 
@@ -657,11 +667,19 @@ def grading_state(assignment_id: int):
                WHERE b.assignment_id = ? ORDER BY an.id""",
             (assignment_id,),
         )
+        # Anonymous grading hands out no names at all, and goes through the tests in scan order:
+        # roster order would put a name back on every test by its place in the queue.
+        anonymous = bool(a["anonymous"])
+        subs = db.submissions(conn, assignment_id, roster_order=not anonymous)
+        if anonymous:
+            for s in subs:
+                s["first_name"] = s["last_name"] = None
         return assignment_meta(conn, a) | {
             "answer_key": a["answer_key"],
             "answer_key_pages": a["answer_key_pages"],
+            "anonymous": anonymous,
             "problems": probs,
-            "submissions": db.submissions(conn, assignment_id, roster_order=True),
+            "submissions": subs,
             "annotations": [dict(r) for r in annotations],
             "graded": sorted(db.graded_pairs(conn, assignment_id)),
         }

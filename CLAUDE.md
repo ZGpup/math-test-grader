@@ -36,6 +36,7 @@ uv run pytest
    upside down or mirrored, then press "Order is correct".
 5. Match names: click the student for each cover page.
 6. Grade: pick a problem, place rubric comments on each student's page, press Enter for the next student.
+   Tick "Anonymous grading" on the assignment first to grade without the names.
 7. Results: review the table, download the CSV, export annotated PDFs.
 
 Keyboard: grading uses `←`/`→` to change students, `1`–`9` to apply a comment, `a` to show the answer key beside the work, and `Enter` for Next. Matching uses typing to filter the roster, `Enter` to assign the top match, and `↑`/`↓` to change tests.
@@ -96,6 +97,11 @@ Grading
 - The points a comment takes or gives are drawn after its text as a superscript carrying its unit (`−2pts`), so a bare number never reads as part of the comment's math. In the export that is a mathtext superscript with the unit upright; in the sidebar list the points sit in their own column, so they stay full size there.
 - Annotations from other problems on the same page are shown faded and can't be edited.
 - A click places a comment at the top right, below any boxes already on the right half of the page.
+
+Anonymous grading
+- `assignments.anonymous` is set on the assignment screen, beside the Grade button, and can be turned on or off at any time: it only changes what the grading screen is given, never what is stored. `db.migrate` adds the column to an older database as off, which is how those assignments were graded.
+- The grading state sends no names at all when it is on, and the tests come in scan order rather than roster order — roster order would name every test by its place in the queue. A test is then called "Test 1", "Test 2"… by that place, and an unmatched one still says so, because its grade would have nowhere to go.
+- Nothing else hides a name: matching is about names, and the results table, the CSV and the exported PDFs are read once the grading is done.
 
 Results and export
 - CSV rows are every roster student in roster order. Absent students get empty cells, and unmatched tests are left out (they still appear in the results table). Problem column headers are the problem labels. Grade % rounds half up to 1 decimal, and point values drop trailing zeros (`7`, `7.5`).

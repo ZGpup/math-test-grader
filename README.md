@@ -39,6 +39,8 @@ uv run pytest
 5. Match names: click the student for each cover page.
 6. Grade: pick a problem, place rubric comments on each student's page, press Enter for the next student.
    A comment's "points off" can be negative, which adds points instead, for bonus questions.
+   Tick "Anonymous grading" on the assignment to grade without the names: the tests then come up as
+   "Test 1", "Test 2"… in scan order. Matching, the results and the exports still use the names.
    "Answer key" opens the key in a column beside the student's work, scrolled to the page for that
    problem. The column scrolls on its own, so any key can be read without moving the student's page.
 7. Results: review the table, download the CSV, export annotated PDFs.
