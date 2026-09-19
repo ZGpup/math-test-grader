@@ -323,6 +323,9 @@ table.results td.cell { cursor: pointer; }
 table.results td.cell:hover { outline: 1px solid var(--accent); outline-offset: -1px; }
 table.results td.ungraded { background: repeating-linear-gradient(135deg, var(--bg-sunken) 0 4px, var(--bg-alt) 4px 8px); color: var(--muted); font-style: italic; }
 table.results tr.absent td, table.results tr.unmatched td { color: var(--muted); }
+table.results tfoot td { background: var(--bg-alt); }
+table.results tfoot td:first-child { font-weight: bold; }
+table.results tfoot tr:first-child td { border-top: 2px solid var(--border); }
 .legend { font-size: 13px; }
 .legend .swatch { display: inline-block; width: 22px; height: 12px; vertical-align: middle; background: repeating-linear-gradient(135deg, var(--bg-sunken) 0 4px, var(--bg-alt) 4px 8px); border: 1px solid var(--border); }
 

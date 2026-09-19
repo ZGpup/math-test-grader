@@ -58,6 +58,43 @@ def test_csv_omits_unmatched(client, assignment):
     assert [r["status"] for r in results["rows"]] == ["matched", "matched", "absent", "unmatched"]
 
 
+def test_summary_statistics(client, assignment):
+    aid = assignment["id"]
+    probs = assignment["problems"]
+    s1, s2, s3 = [s["id"] for s in assignment["submissions"]]
+
+    # The scores of test_csv_format: 32.5, 24 and 35 out of 35.
+    client.put(f"/api/assignments/{aid}/pages/{probs[3]['page']}", json={"kind": "problem", "label": "4a", "max_points": 5})
+    place(client, s1, add_comment(client, probs[0]["id"], "a", 2.5))
+    place(client, s2, add_comment(client, probs[1]["id"], "b", 12))
+    place(client, s2, add_comment(client, probs[3]["id"], "c", 1))
+
+    # An absent student is left out; an unmatched test still counts.
+    roster = client.get(f"/api/courses/{assignment['course_id']}").json()["roster_text"]
+    client.put(f"/api/courses/{assignment['course_id']}/roster", json={"text": roster + "Dan Absent\n"})
+    client.put(f"/api/submissions/{s3}/student", json={"student_id": None})
+
+    stats = client.get(f"/api/assignments/{aid}/results").json()["stats"]
+    assert [s["label"] for s in stats] == ["Average", "Median", "High", "Low"]
+    assert [s["total"] for s in stats] == [30.5, 32.5, 35, 24]
+    assert [s["percent"] for s in stats] == [87.1, 92.9, 100.0, 68.6]
+    assert stats[0]["cells"] == [9.166667, 6.666667, 10, 4.666667]
+    assert stats[1]["cells"] == [10, 10, 10, 5]
+    assert stats[2]["cells"] == [10, 10, 10, 5]
+    assert stats[3]["cells"] == [7.5, 0, 10, 4]
+
+
+def test_summary_statistics_edge_cases():
+    def test(total: float) -> dict:
+        return {"status": "matched", "cells": [{"points": total}], "total": total}
+
+    absent = {"status": "absent", "cells": [], "total": None}
+    median = export.stats([test(20), test(25), absent], 1, 30)[1]
+    assert median == {"label": "Median", "cells": [22.5], "total": 22.5, "percent": 75.0}
+    assert export.stats([absent], 1, 30) == []
+    assert export.stats([], 1, 30) == []
+
+
 def test_reassigning_student_moves_match(client, assignment):
     aid = assignment["id"]
     s1, s2, _ = [s["id"] for s in assignment["submissions"]]

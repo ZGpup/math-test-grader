@@ -70,7 +70,8 @@ GRADER_DATA=~/Library/"Application Support"/MathTestGrader uv run grader
    "Test 1", "Test 2"… in scan order. Matching, the results and the exports still use the names.
    "Answer key" opens the key in a column beside the student's work, scrolled to the page for that
    problem. The column scrolls on its own, so any key can be read without moving the student's page.
-7. Results: review the table, download the CSV, export annotated PDFs.
+7. Results: review the table with the average, median, high and low below it, download the CSV,
+   export annotated PDFs.
 
 Keyboard: grading uses `←`/`→` to change students, `1`–`9` to apply a comment, `a` to show the answer key beside the work, and `Enter` for Next. Matching uses typing to filter the roster, `Enter` to assign the top match, and `↑`/`↓` to change tests.
 

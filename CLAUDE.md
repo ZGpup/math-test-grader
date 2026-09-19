@@ -37,7 +37,8 @@ uv run pytest
 5. Match names: click the student for each cover page.
 6. Grade: pick a problem, place rubric comments on each student's page, press Enter for the next student.
    Tick "Anonymous grading" on the assignment first to grade without the names.
-7. Results: review the table, download the CSV, export annotated PDFs.
+7. Results: review the table with the average, median, high and low below it, download the CSV,
+   export annotated PDFs.
 
 Keyboard: grading uses `←`/`→` to change students, `1`–`9` to apply a comment, `a` to show the answer key beside the work, and `Enter` for Next. Matching uses typing to filter the roster, `Enter` to assign the top match, and `↑`/`↓` to change tests.
 
@@ -108,6 +109,7 @@ Anonymous grading
 - Nothing else hides a name: matching is about names, and the results table, the CSV and the exported PDFs are read once the grading is done.
 
 Results and export
+- Below the students, the results table has Average, Median, High and Low rows for the grade, each problem and the total. They cover every test in the table, unmatched ones included, and leave out absent students. They use the current scores like every other cell, so an ungraded problem counts at full points. A median of an even count is the mean of the middle two. The grade is the grade of that statistic's total rather than the statistic of the rounded grades, so an average grade is exactly the average total's grade. The rows stay at the bottom whatever the sort, and are not in the CSV, which stays one row per student for gradebooks.
 - CSV rows are every roster student in roster order. Absent students get empty cells, and unmatched tests are left out (they still appear in the results table). Problem column headers are the problem labels. Grade % rounds half up to 1 decimal, and point values drop trailing zeros (`7`, `7.5`).
 - PDFs are named `<Last>_<First>.pdf` (unsafe characters become `_`, and duplicates get `_2`). Each export replaces the previous one. The score box goes in the top-right corner of the mapped cover page.
 - Comment text is drawn with the vendored KaTeX_Main font, and math uses matplotlib mathtext with Computer Modern. Each `$...$` that mathtext can't parse is printed as raw text. Rotated scan pages are normalized before drawing.

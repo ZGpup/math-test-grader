@@ -5,6 +5,7 @@ import io
 import re
 import shutil
 import sqlite3
+import statistics
 import zipfile
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -75,7 +76,30 @@ def results(conn: sqlite3.Connection, assignment_id: int) -> dict:
 
     rows = [row(st["first_name"], st["last_name"], by_student.get(st["id"])) for st in db.students(conn, course_id)]
     rows += [row("", "", s) for s in subs if s["student_id"] is None]
-    return {"problems": probs, "total_possible": possible, "rows": rows}
+    return {"problems": probs, "total_possible": possible, "rows": rows, "stats": stats(rows, len(probs), possible)}
+
+
+def stats(rows: list[dict], n_problems: int, possible: float) -> list[dict]:
+    """Average, median, high and low of every test in the table, absent students aside.
+
+    The grade is taken from the statistic of the totals rather than of the rounded grades,
+    so an average grade is exactly the average total's grade.
+    """
+    tests = [r for r in rows if r["status"] != "absent"]
+    if not tests:
+        return []
+    out = []
+    for label, f in (("Average", statistics.fmean), ("Median", statistics.median), ("High", max), ("Low", min)):
+        total = round(f([r["total"] for r in tests]), 6)
+        out.append(
+            {
+                "label": label,
+                "cells": [round(f([r["cells"][i]["points"] for r in tests]), 6) for i in range(n_problems)],
+                "total": total,
+                "percent": grade_percent(total, possible),
+            }
+        )
+    return out
 
 
 def results_csv(res: dict) -> str:

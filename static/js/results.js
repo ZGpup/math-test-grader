@@ -4,7 +4,8 @@ const assignmentId = param('id');
 let R = null;
 let sort = { col: null, dir: 1 };
 
-// Column definitions: title, optional "/max" label, sort value and cell text per row.
+// Column definitions: title, optional "/max" label, sort value and cell text per row,
+// and for the number columns the cell text of a summary row (Average, Median, High, Low).
 function columns() {
   const cols = [
     { title: 'First name', value: (r) => r.first_name.toLowerCase(), cell: (r) => r.first_name || (r.status === 'unmatched' ? 'Unmatched' : '') },
@@ -13,6 +14,7 @@ function columns() {
       title: 'Grade %', num: true,
       value: (r) => r.percent,
       cell: (r) => (r.status === 'absent' ? 'Absent' : r.percent.toFixed(1)),
+      stat: (s) => s.percent.toFixed(1),
     },
   ];
   R.problems.forEach((p, i) => cols.push({
@@ -20,11 +22,13 @@ function columns() {
     value: (r) => (r.cells.length ? r.cells[i].points : null),
     cell: (r) => (r.cells.length ? fmt(r.cells[i].points) : ''),
     ungraded: (r) => r.cells.length && !r.cells[i].graded,
+    stat: (s) => fmt(s.cells[i]),
   }));
   cols.push({
     title: 'Total', max: `/${fmt(R.total_possible)}`, num: true,
     value: (r) => r.total,
     cell: (r) => (r.total === null ? '' : fmt(r.total)),
+    stat: (s) => fmt(s.total),
   });
   return cols;
 }
@@ -71,7 +75,11 @@ function render() {
       return td;
     })));
   if (!body.length) body.push(h('tr', { class: 'empty' }, h('td', { colspan: cols.length }, 'No students or tests')));
-  $('#results').replaceChildren(h('thead', {}, head), h('tbody', {}, body));
+  // Summary rows stay below the students whatever the sort. The name columns hold the label.
+  const foot = R.stats.map((s) => h('tr', {},
+    h('td', { colspan: 2 }, s.label),
+    cols.slice(2).map((c) => h('td', { class: 'num' }, c.stat(s)))));
+  $('#results').replaceChildren(h('thead', {}, head), h('tbody', {}, body), h('tfoot', {}, foot));
 }
 
 async function load() {
