@@ -18,6 +18,16 @@ def test_label_rendering_falls_back_to_raw_text():
     assert all(w <= 80 for _, w, _ in wrapped)
 
 
+def test_label_keeps_typed_line_breaks():
+    """A break the grader typed stands, and each of those lines still wraps on its own."""
+    assert len(export.render_label("one\ntwo\nthree", 0, 10, 400)) == 3
+    assert len(export.render_label("one\n\ntwo", 0, 10, 400)) == 3  # the blank line is a line
+    assert len(export.render_label("one line only", 0, 10, 400)) == 1
+    both = export.render_label("short\na fairly long second line that must wrap onto several lines", 2, 10, 80)
+    assert len(both) > 3
+    assert all(png.startswith(b"\x89PNG") and w <= 80 for png, w, _ in both)
+
+
 def test_export_pdfs(client, assignment, fixtures):
     aid = assignment["id"]
     p1, p2 = assignment["problems"][0]["id"], assignment["problems"][1]["id"]

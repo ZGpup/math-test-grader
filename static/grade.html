@@ -45,9 +45,10 @@
     </div>
     <button id="next" class="primary wide">Next</button>
     <h3>Comments</h3>
+    <p class="hint muted">Drag a comment onto the page, or double-click the page to write one there.</p>
     <ol id="comments" class="comment-list"></ol>
     <form id="new-comment" class="comment-form" style="margin-top: 10px">
-      <input type="text" id="nc-text" placeholder="New comment" autocomplete="off" spellcheck="false">
+      <textarea id="nc-text" rows="1" placeholder="New comment" autocomplete="off" spellcheck="false"></textarea>
       <div id="nc-preview" class="preview"></div>
       <div class="row">
         <label title="Points taken off. A negative number gives points instead, for bonus questions.">Points off <input type="number" id="nc-ded" step="any" value="0"></label>

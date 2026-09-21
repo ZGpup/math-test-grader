@@ -699,6 +699,28 @@ def create_comment(problem_id: int, body: CommentIn):
         return {"id": cur.lastrowid, "problem_id": problem_id, "text": body.text, "deduction": body.deduction, "uses": 0}
 
 
+@app.post("/api/comments/{comment_id}/duplicate")
+def duplicate_comment(comment_id: int):
+    """A copy of a comment, right below the original, for a slight variation of the same mistake."""
+    with db.session() as conn:
+        c = fetch(conn, "SELECT * FROM comments WHERE id = ?", (comment_id,))
+        conn.execute(
+            "UPDATE comments SET position = position + 1 WHERE problem_id = ? AND position > ?",
+            (c["problem_id"], c["position"]),
+        )
+        cur = conn.execute(
+            "INSERT INTO comments (problem_id, text, deduction, position) VALUES (?, ?, ?, ?)",
+            (c["problem_id"], c["text"], c["deduction"], c["position"] + 1),
+        )
+        return {
+            "id": cur.lastrowid,
+            "problem_id": c["problem_id"],
+            "text": c["text"],
+            "deduction": c["deduction"],
+            "uses": 0,
+        }
+
+
 @app.patch("/api/comments/{comment_id}")
 def update_comment(comment_id: int, body: CommentPatch):
     with db.session() as conn:

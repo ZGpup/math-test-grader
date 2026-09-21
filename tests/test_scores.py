@@ -59,6 +59,35 @@ def test_deductions_and_propagation(client, assignment):
     assert scores(client, aid) == [[1, 10, 10, 10], [10, 10, 10, 10], [10, 6, 10, 10]]
 
 
+def test_duplicate_comment(client, assignment):
+    """A copy sits right below its original and is a comment of its own from the start."""
+    aid = assignment["id"]
+    p1 = assignment["problems"][0]["id"]
+    s1, s2, _ = [s["id"] for s in assignment["submissions"]]
+    first = add_comment(client, p1, "Sign error", 2)
+    last = add_comment(client, p1, "Missing units", 1)
+    place(client, s1, first)
+
+    copy = client.post(f"/api/comments/{first}/duplicate")
+    assert copy.status_code == 200, copy.text
+    copy = copy.json()
+    assert (copy["text"], copy["deduction"], copy["uses"]) == ("Sign error", 2, 0)
+
+    def labels():
+        state = client.get(f"/api/assignments/{aid}/grading").json()
+        return [(c["id"], c["text"]) for c in state["problems"][0]["comments"]]
+
+    assert labels() == [(first, "Sign error"), (copy["id"], "Sign error"), (last, "Missing units")]
+
+    # The copy is edited and placed on its own; the original and its placements are untouched.
+    assert client.patch(f"/api/comments/{copy['id']}", json={"text": "Sign error twice", "deduction": 3}).status_code == 200
+    place(client, s2, copy["id"])
+    assert labels()[0] == (first, "Sign error")
+    assert scores(client, aid)[:2] == [[8, 10, 10, 10], [7, 10, 10, 10]]
+
+    assert client.post("/api/comments/9999/duplicate").status_code == 404
+
+
 def test_invalid_comments_rejected(client, assignment):
     p1 = assignment["problems"][0]["id"]
     assert client.post(f"/api/problems/{p1}/comments", json={"text": "  "}).status_code == 422

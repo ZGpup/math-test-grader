@@ -206,15 +206,18 @@ def _render_line(tokens: list[tuple[str, str, bool]], prop: FontProperties) -> t
 
 def render_label(text: str, deduction: float, font_size: float, max_width: float) -> list[tuple[bytes, float, float]]:
     prop = _prop(font_size)
-    tokens = _tokens(text, prop)
+    # A typed line break stands and each of those lines then wraps on its own, which is how the
+    # screen reads it too (static/css/style.css .ann: white-space: pre-wrap).
+    paragraphs = [_tokens(part, prop) for part in text.split("\n")]
     if deduction:
         # A superscript with its unit, like the screen (static/css/style.css .ann .ded),
         # so it does not read as part of the comment's math.
         d = f" $^{{{'-' if deduction > 0 else '+'}{fmt_num(abs(deduction))}\\mathrm{{pts}}}}$"
-        tokens.append((d, d, True))
-    if not tokens:
-        tokens = [(" ", " ", False)]
-    return [_render_line(line, prop) for line in _wrap(tokens, prop, max_width)]
+        paragraphs[-1].append((d, d, True))
+    lines: list[list] = []
+    for tokens in paragraphs:
+        lines += _wrap(tokens, prop, max_width) or [[(" ", " ", False)]]
+    return [_render_line(line, prop) for line in lines]
 
 
 # ---------------------------------------------------------------- PDF export

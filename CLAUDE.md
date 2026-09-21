@@ -35,12 +35,13 @@ uv run pytest
 4. Organize pages: one column per test. Drag a misfed page to its slot, turn the ones that came out
    upside down or mirrored, then press "Order is correct".
 5. Match names: click the student for each cover page.
-6. Grade: pick a problem, place rubric comments on each student's page, press Enter for the next student.
+6. Grade: pick a problem, then put comments on the page — drag one out of the sidebar, or double-click
+   the page to write one right there. Press Enter for the next student.
    Tick "Anonymous grading" on the assignment first to grade without the names.
 7. Results: review the table with the average, median, high and low below it, download the CSV,
    export annotated PDFs.
 
-Keyboard: grading uses `←`/`→` to change students, `1`–`9` to apply a comment, `a` to show the answer key beside the work, and `Enter` for Next. Matching uses typing to filter the roster, `Enter` to assign the top match, and `↑`/`↓` to change tests.
+Keyboard: grading uses `←`/`→` to change students, `a` to show the answer key beside the work, and `Enter` for Next. In a comment box, `Enter` saves it and `shift`+`Enter` starts a new line. Matching uses typing to filter the roster, `Enter` to assign the top match, and `↑`/`↓` to change tests.
 
 ## Layout
 
@@ -101,7 +102,10 @@ Grading
 - An annotation's (x, y) is the top-left corner of its box. Box font size is 1.6% of page width and max width is 35%, both on screen (CSS container units) and in the export, so exported PDFs match the screen.
 - The points a comment takes or gives are drawn after its text as a superscript carrying its unit (`−2pts`), so a bare number never reads as part of the comment's math. In the export that is a mathtext superscript with the unit upright; in the sidebar list the points sit in their own column, so they stay full size there.
 - Annotations from other problems on the same page are shown faded and can't be edited.
-- A click places a comment at the top right, below any boxes already on the right half of the page.
+- A comment reaches a test two ways and no others: dragged out of the sidebar, or written in the box a double-click opens where it will sit. Nothing places one by itself — writing a comment in the sidebar only adds it to the list, clicking a row does nothing, and there is no key that applies one. Where a comment lands is always where it was put, so a box never turns up on a page nobody put it on. That is also why there is no longer a default spot: every placement has one the grader chose.
+- The box a double-click opens is a piece of the interface sitting on the page (`.spot-form`), not part of the sheet: it keeps the interface's own font size rather than the page's container units, and it is narrow so it covers as little of the work as it can. It closes on Escape, on Cancel, and on any render — a box written for one page must not be left hanging over another.
+- Comment text may run to several lines. The box wraps and grows with what is typed instead of scrolling past one line; a typed line break stands. On screen that is `white-space: pre-line` and in the export `render_label` wraps each typed line on its own, so runs of spaces collapse in both and the export still matches the screen.
+- "Duplicate" copies a comment into the row below it and opens that copy for editing, for the mistake that is a slight variation of another. The copy is a comment of its own from the start: the position shift happens in the database (`POST /api/comments/{id}/duplicate`), so the order after a reload is the order on screen.
 
 Anonymous grading
 - `assignments.anonymous` is set on the assignment screen, beside the Grade button, and can be turned on or off at any time: it only changes what the grading screen is given, never what is stored. `db.migrate` adds the column to an older database as off, which is how those assignments were graded.

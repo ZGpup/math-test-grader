@@ -107,6 +107,7 @@ function studentLabel() {
 function render() {
   const p = problem();
   const s = sub();
+  closeSpot(); // a box written on one page must not be left hanging over another
   history.replaceState(null, '', `?id=${assignmentId}&problem=${pid}&sub=${s.id}`);
   renderTabs();
   $('#student').textContent = studentLabel();
@@ -194,19 +195,18 @@ function annBox(a, c) {
 function renderComments() {
   const p = problem();
   const applied = appliedComments(sub());
-  $('#comments').replaceChildren(...p.comments.map((c, i) =>
-    (editing === c.id ? editRow(c) : commentRow(c, i, applied.has(c.id)))));
+  $('#comments').replaceChildren(...p.comments.map((c) =>
+    (editing === c.id ? editRow(c) : commentRow(c, applied.has(c.id)))));
 }
 
-function commentRow(c, i, applied) {
+function commentRow(c, applied) {
   const li = h('li', { class: applied ? 'applied' : '', draggable: true },
-    h('span', { class: 'key' }, i < 9 ? i + 1 : ''),
     tex('span', c.text, { class: 'text' }),
     h('span', { class: c.deduction < 0 ? 'ded bonus' : 'ded' }, c.deduction ? points(c.deduction) : ''),
     h('span', { class: 'tools' },
-      h('button', { class: 'link', onclick: (e) => { e.stopPropagation(); editing = c.id; renderComments(); } }, 'Edit'),
-      h('button', { class: 'link', onclick: (e) => { e.stopPropagation(); deleteComment(c); } }, 'Delete')));
-  li.addEventListener('click', () => placeAtDefault(c));
+      h('button', { class: 'link', onclick: () => { editing = c.id; renderComments(); } }, 'Edit'),
+      h('button', { class: 'link', onclick: () => duplicateComment(c) }, 'Duplicate'),
+      h('button', { class: 'link', onclick: () => deleteComment(c) }, 'Delete')));
   li.addEventListener('dragstart', (e) => {
     e.dataTransfer.setData('application/x-comment', String(c.id));
     e.dataTransfer.effectAllowed = 'copy';
@@ -218,13 +218,37 @@ function usesOf(c) {
   return new Set(G.annotations.filter((a) => a.comment_id === c.id).map((a) => a.submission_id)).size;
 }
 
+// A comment's text box. It wraps and grows with what is typed, so a long comment is written in
+// full instead of scrolling past one line: Enter saves the comment, shift+Enter starts a new line.
+// Returns the function that resizes it, for a caller that changes the value itself.
+function fitBox(box, preview) {
+  const grow = () => {
+    box.style.height = 'auto';
+    box.style.height = `${box.scrollHeight + 2}px`; // scrollHeight leaves out the border
+  };
+  box.addEventListener('input', () => { grow(); renderTex(preview, box.value); });
+  box.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    e.preventDefault();
+    box.form.requestSubmit();
+  });
+  renderTex(preview, box.value);
+  requestAnimationFrame(grow);
+  return grow;
+}
+
+function commentBox(value, preview, placeholder = 'Comment') {
+  const box = h('textarea', { rows: 1, placeholder, autocomplete: 'off', spellcheck: 'false' });
+  box.value = value;
+  fitBox(box, preview);
+  return box;
+}
+
 function editRow(c) {
-  const text = h('input', { type: 'text', value: c.text, autocomplete: 'off', spellcheck: 'false' });
   const preview = h('div', { class: 'preview' });
+  const text = commentBox(c.text, preview);
   const ded = h('input', { type: 'number', step: 'any', value: String(c.deduction), title: DED_HINT });
   const uses = usesOf(c);
-  text.addEventListener('input', () => renderTex(preview, text.value));
-  renderTex(preview, c.text);
   const cancel = () => { editing = null; renderComments(); };
   const form = h('form', { class: 'comment-form' },
     text, preview,
@@ -276,33 +300,18 @@ function measure(c) {
   return size;
 }
 
-// Top-right corner, below the boxes already on the right half of this page.
-function defaultSpot(c) {
-  const rect = imageRect();
-  const size = measure(c);
-  let y = 0.02;
-  if (rect.width && rect.height) {
-    for (const el of sheet.querySelectorAll('.ann')) {
-      if ((el.offsetLeft + el.offsetWidth) / rect.width > 0.5) {
-        y = Math.max(y, (el.offsetTop + el.offsetHeight) / rect.height + 0.006);
-      }
-    }
-  }
-  if (y + size.h > 0.98) y = 0.02;
-  return { x: clamp(0.98 - size.w, 0, 1), y };
-}
-
+// A comment lands at (x, y) with its box kept inside the page.
 async function placeAnnotation(c, x, y) {
   const s = sub();
-  const a = await POST(`/api/submissions/${s.id}/annotations`, { comment_id: c.id, page, x, y });
+  const size = measure(c);
+  const a = await POST(`/api/submissions/${s.id}/annotations`, {
+    comment_id: c.id,
+    page,
+    x: clamp(x, 0, Math.max(0, 1 - size.w)),
+    y: clamp(y, 0, Math.max(0, 1 - size.h)),
+  });
   G.annotations.push(a);
   if (sub() === s) render();
-}
-
-function placeAtDefault(c) {
-  if (c.problem_id !== pid) return;
-  const spot = defaultSpot(c);
-  return placeAnnotation(c, spot.x, spot.y);
 }
 
 async function removeAnnotation(a) {
@@ -361,13 +370,77 @@ sheet.addEventListener('drop', (e) => {
   if (!c || c.problem_id !== pid) return;
   e.preventDefault();
   const rect = imageRect();
-  const size = measure(c);
-  const x = clamp((e.clientX - rect.left) / rect.width, 0, Math.max(0, 1 - size.w));
-  const y = clamp((e.clientY - rect.top) / rect.height, 0, Math.max(0, 1 - size.h));
-  placeAnnotation(c, x, y);
+  placeAnnotation(c, (e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height);
+});
+
+// ------------------------------------------------------------------ writing on the page
+
+// A comment reaches a test two ways and no others: dragged out of the sidebar, or written in the
+// box a double-click opens where it will sit. Nothing places a comment by itself -- writing one in
+// the sidebar only adds it to the list -- so a comment never lands somewhere it was not put.
+let spot = null;
+
+function closeSpot() {
+  if (spot) spot.remove();
+  spot = null;
+}
+
+function openSpot(x, y) {
+  closeSpot();
+  const preview = h('div', { class: 'preview' });
+  const text = commentBox('', preview, 'Comment here');
+  const ded = h('input', { type: 'number', step: 'any', value: '0', title: DED_HINT });
+  const form = h('form', { class: 'comment-form spot-form' },
+    text, preview,
+    h('div', { class: 'row' },
+      h('label', { title: DED_HINT }, 'Points off ', ded),
+      h('span', { class: 'spacer' }),
+      h('button', { type: 'button', onclick: closeSpot }, 'Cancel'),
+      h('button', { class: 'primary' }, 'Place')));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const value = text.value.trim();
+    const deduction = parseFloat(ded.value || '0');
+    if (!value) return;
+    if (!Number.isFinite(deduction)) return showError('Points off must be a number');
+    const p = problem();
+    const c = await POST(`/api/problems/${p.id}/comments`, { text: value, deduction });
+    p.comments.push(c);
+    indexComments();
+    closeSpot();
+    await placeAnnotation(c, x, y);
+  });
+  form.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSpot(); });
+  // The box sits on the page, so the page's own handlers must leave it alone.
+  form.addEventListener('pointerdown', (e) => e.stopPropagation());
+  form.addEventListener('dblclick', (e) => e.stopPropagation());
+  sheet.append(form);
+  const rect = imageRect();
+  form.style.left = `${clamp(x, 0, Math.max(0, 1 - form.offsetWidth / rect.width)) * 100}%`;
+  form.style.top = `${clamp(y, 0, Math.max(0, 1 - form.offsetHeight / rect.height)) * 100}%`;
+  spot = form;
+  text.focus();
+}
+
+sheet.addEventListener('dblclick', (e) => {
+  if (e.target.closest('.ann, .spot-form')) return;
+  const rect = imageRect();
+  if (!rect.width || !rect.height) return;
+  openSpot(clamp((e.clientX - rect.left) / rect.width, 0, 1), clamp((e.clientY - rect.top) / rect.height, 0, 1));
 });
 
 // ------------------------------------------------------------------ comments
+
+// A copy right below the original, opened for editing: the mistake that is a slight variation of
+// another gets a comment that is a slight variation of its own, ready to be dragged out.
+async function duplicateComment(c) {
+  const copy = await POST(`/api/comments/${c.id}/duplicate`);
+  const p = G.problems.find((x) => x.id === c.problem_id);
+  p.comments.splice(p.comments.indexOf(c) + 1, 0, copy);
+  indexComments();
+  editing = copy.id;
+  renderComments();
+}
 
 async function deleteComment(c) {
   const uses = usesOf(c);
@@ -384,7 +457,7 @@ async function deleteComment(c) {
   render();
 }
 
-$('#nc-text').addEventListener('input', () => renderTex($('#nc-preview'), $('#nc-text').value));
+const ncFit = fitBox($('#nc-text'), $('#nc-preview'));
 $('#nc-text').addEventListener('keydown', (e) => { if (e.key === 'Escape') e.target.blur(); });
 $('#new-comment').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -399,9 +472,10 @@ $('#new-comment').addEventListener('submit', async (e) => {
   $('#nc-text').value = '';
   $('#nc-ded').value = '0';
   renderTex($('#nc-preview'), '');
+  ncFit();
   document.activeElement.blur();
-  if (pid === p.id) await placeAtDefault(c);
-  else render();
+  // The comment joins the list and nothing more: it reaches a test when it is dragged there.
+  render();
 });
 
 // ------------------------------------------------------------------ navigation
@@ -479,9 +553,8 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'a' || e.key === 'A') {
     e.preventDefault();
     toggleKey();
-  } else if (/^[1-9]$/.test(e.key)) {
-    const c = problem().comments[parseInt(e.key, 10) - 1];
-    if (c) placeAtDefault(c);
+  } else if (e.key === 'Escape') {
+    closeSpot();
   }
 });
 
