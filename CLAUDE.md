@@ -29,7 +29,9 @@ uv run pytest
 ## Workflow
 
 1. Home: add a course, then paste the roster (one student per line, `First Last` or `Last, First`).
-2. Add an assignment, upload the blank test, and set the cover page plus each problem's label and points.
+2. Add an assignment, upload the blank test, and say what each page holds: one problem per problem
+   printed on it, each with a label and points, plus "Cover" on the page carrying the name. A page
+   takes any number of problems, the cover included, and a test may have no cover page at all.
    Optionally upload an answer key.
 3. Upload scan PDFs with the pages per test, and check the problem-to-scan-page mapping.
 4. Organize pages: one column per test. Drag a misfed page to its slot, turn the ones that came out
@@ -66,7 +68,10 @@ Storage
 - Scores are never stored. They are computed from placed comments when read, so editing a comment's text or deduction updates every submission right away.
 
 Blank test
-- New problems default to 10 points and number themselves in page order. Changing the cover turns the old cover page into "none". To make the cover a problem or "none", pick another cover first.
+- A page carries any number of problems and may be the cover as well, because a quiz often has the name at the top and problems below it. Nothing is a "kind": `problems.page` says which page a problem is printed on, `problems.position` the order it sits in on that page, and `assignments.cover_page` which page the name is read from (`-1` for none). Problems are read page by page, then by position, which is the order of the grading tabs, the results columns and the CSV.
+- The cover page is only two things: the page Match names opens on, and the page the exported score box goes on. With no cover page both fall back to the first page of the test (`pdf.cover_offset`, mirrored by `coverOffset` in `static/js/common.js`), so a test needs no cover to be graded, matched or exported.
+- Uploading a blank test lays out the usual shape to start from — page 1 the cover, one problem per page after it, 10 points each — and everything in it can then be changed. New problems default to 10 points and take the number after the highest one already in use, so 1, 2a, 2b is followed by 3.
+- An older database had `UNIQUE (assignment_id, page)` and no `position`. `db.migrate` rebuilds the table to drop the rule and add the column, with foreign keys off, because the comments and graded rows point at problem ids that must survive.
 - You can't replace the blank test while scans exist (delete the scans first), because the page mappings depend on its page count.
 
 Answer key
@@ -101,7 +106,7 @@ Grading
 - "Graded" is only a status flag, set by Next (click it in the sidebar to toggle). Results and the CSV always use the current computed scores; ungraded cells are striped in the results table.
 - An annotation's (x, y) is the top-left corner of its box. Box font size is 1.6% of page width and max width is 35%, both on screen (CSS container units) and in the export, so exported PDFs match the screen.
 - The points a comment takes or gives are drawn after its text as a superscript carrying its unit (`−2pts`), so a bare number never reads as part of the comment's math. In the export that is a mathtext superscript with the unit upright; in the sidebar list the points sit in their own column, so they stay full size there.
-- Annotations from other problems on the same page are shown faded and can't be edited.
+- Annotations from other problems on the same page are shown faded and can't be edited. Two problems printed on one page are therefore graded one after the other on the same image, each seeing the other's marks but only owning its own.
 - A comment reaches a test two ways and no others: dragged out of the sidebar, or written in the box a double-click opens where it will sit. Nothing places one by itself — writing a comment in the sidebar only adds it to the list, clicking a row does nothing, and there is no key that applies one. Where a comment lands is always where it was put, so a box never turns up on a page nobody put it on. That is also why there is no longer a default spot: every placement has one the grader chose.
 - The box a double-click opens is a piece of the interface sitting on the page (`.spot-form`), not part of the sheet: it keeps the interface's own font size rather than the page's container units, and it is narrow so it covers as little of the work as it can. It closes on Escape, on Cancel, and on any render — a box written for one page must not be left hanging over another.
 - Comment text may run to several lines. The box wraps and grows with what is typed instead of scrolling past one line; a typed line break stands. On screen that is `white-space: pre-line` and in the export `render_label` wraps each typed line on its own, so runs of spaces collapse in both and the export still matches the screen.
@@ -115,7 +120,7 @@ Anonymous grading
 Results and export
 - Below the students, the results table has Average, Median, High and Low rows for the grade, each problem and the total. They cover every test in the table, unmatched ones included, and leave out absent students. They use the current scores like every other cell, so an ungraded problem counts at full points. A median of an even count is the mean of the middle two. The grade is the grade of that statistic's total rather than the statistic of the rounded grades, so an average grade is exactly the average total's grade. The rows stay at the bottom whatever the sort, and are not in the CSV, which stays one row per student for gradebooks.
 - CSV rows are every roster student in roster order. Absent students get empty cells, and unmatched tests are left out (they still appear in the results table). Problem column headers are the problem labels. Grade % rounds half up to 1 decimal, and point values drop trailing zeros (`7`, `7.5`).
-- PDFs are named `<Last>_<First>.pdf` (unsafe characters become `_`, and duplicates get `_2`). Each export replaces the previous one. The score box goes in the top-right corner of the mapped cover page.
+- PDFs are named `<Last>_<First>.pdf` (unsafe characters become `_`, and duplicates get `_2`). Each export replaces the previous one. The score box goes in the top-right corner of the mapped cover page, or of the first page when the test has no cover page. It lists every problem, so several on one page each get their own row.
 - Comment text is drawn with the vendored KaTeX_Main font, and math uses matplotlib mathtext with Computer Modern. Each `$...$` that mathtext can't parse is printed as raw text. Rotated scan pages are normalized before drawing.
 
 Mac app

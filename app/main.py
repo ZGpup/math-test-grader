@@ -9,7 +9,6 @@ import sqlite3
 import threading
 import webbrowser
 from pathlib import Path
-from typing import Literal
 
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -105,11 +104,15 @@ def batch_info(conn: sqlite3.Connection, b: sqlite3.Row, blank_pages: int) -> di
 def assignment_detail(conn: sqlite3.Connection, assignment_id: int) -> dict:
     a = assignment_row(conn, assignment_id)
     probs = db.problems(conn, assignment_id)
-    by_page = {p["page"]: p for p in probs}
-    pages = []
-    for i in range(a["blank_pages"]):
-        kind = "cover" if i == a["cover_page"] else "problem" if i in by_page else "none"
-        pages.append({"index": i, "kind": kind, "problem": by_page.get(i)})
+    # A page carries any number of problems, and the cover page may carry them too: a quiz with the
+    # name on top and two problems below it is one page that is the cover and holds both problems.
+    by_page: dict[int, list[dict]] = {}
+    for p in probs:
+        by_page.setdefault(p["page"], []).append(p)
+    pages = [
+        {"index": i, "cover": i == a["cover_page"], "problems": by_page.get(i, [])}
+        for i in range(a["blank_pages"])
+    ]
     batches = conn.execute("SELECT * FROM batches WHERE assignment_id = ? ORDER BY id", (assignment_id,)).fetchall()
     counts = dict(
         conn.execute(
@@ -136,8 +139,32 @@ def assignment_detail(conn: sqlite3.Connection, assignment_id: int) -> dict:
 
 
 def next_label(conn: sqlite3.Connection, assignment_id: int) -> str:
-    numbers = [int(p["label"]) for p in db.problems(conn, assignment_id) if p["label"].isdigit()]
-    return str(max(numbers, default=0) + 1)
+    """One past the highest number a label starts with, so 1, 2a, 2b is followed by 3."""
+    starts = [re.match(r"\d+", p["label"]) for p in db.problems(conn, assignment_id)]
+    return str(max((int(m[0]) for m in starts if m), default=0) + 1)
+
+
+def next_position(conn: sqlite3.Connection, assignment_id: int, page: int) -> int:
+    (position,) = conn.execute(
+        "SELECT COALESCE(MAX(position), -1) + 1 FROM problems WHERE assignment_id = ? AND page = ?",
+        (assignment_id, page),
+    ).fetchone()
+    return position
+
+
+def place_problem(conn: sqlite3.Connection, assignment_id: int, page: int, problem_id: int, index: int) -> None:
+    """Put a problem at `index` among the problems of its page and renumber that page."""
+    ids = [
+        r["id"]
+        for r in conn.execute(
+            "SELECT id FROM problems WHERE assignment_id = ? AND page = ? ORDER BY position, id",
+            (assignment_id, page),
+        )
+        if r["id"] != problem_id
+    ]
+    ids.insert(min(max(index, 0), len(ids)), problem_id)
+    for i, pid in enumerate(ids):
+        conn.execute("UPDATE problems SET position = ? WHERE id = ?", (i, pid))
 
 
 def submission_assignment(conn: sqlite3.Connection, submission_id: int) -> sqlite3.Row:
@@ -166,8 +193,19 @@ class RosterIn(BaseModel):
     text: str
 
 
-class PageIn(BaseModel):
-    kind: Literal["cover", "problem", "none"]
+class CoverIn(BaseModel):
+    page: int | None = Field(None, ge=0)  # None: the test has no cover page
+
+
+class ProblemIn(BaseModel):
+    page: int = Field(ge=0)
+    label: str | None = None
+    max_points: float | None = Field(None, ge=0)
+
+
+class ProblemPatch(BaseModel):
+    page: int | None = Field(None, ge=0)
+    position: int | None = Field(None, ge=0)
     label: str | None = None
     max_points: float | None = Field(None, ge=0)
 
@@ -359,8 +397,10 @@ def upload_blank(assignment_id: int, file: UploadFile = File(...)):
                answer_key = NULL, answer_key_pages = 0 WHERE id = ?""",
             (key, count, assignment_id),
         )
+        # The usual shape to start from: page 1 carries the name, the rest carry one problem each.
+        # Every part of it can be changed afterwards, the cover included.
         conn.executemany(
-            "INSERT INTO problems (assignment_id, page, label, max_points) VALUES (?, ?, ?, ?)",
+            "INSERT INTO problems (assignment_id, page, label, max_points, position) VALUES (?, ?, ?, ?, 0)",
             [(assignment_id, i, str(i), DEFAULT_POINTS) for i in range(1, count)],
         )
         detail = assignment_detail(conn, assignment_id)
@@ -399,35 +439,69 @@ def delete_answer_key(assignment_id: int):
     return detail
 
 
-@app.put("/api/assignments/{assignment_id}/pages/{page}")
-def set_page(assignment_id: int, page: int, body: PageIn):
-    """Set a blank page to be the cover, a problem (with label and points), or nothing."""
+@app.put("/api/assignments/{assignment_id}/cover")
+def set_cover(assignment_id: int, body: CoverIn):
+    """Choose the page carrying the student's name, or none at all. It may hold problems too."""
     with db.session() as conn:
         a = assignment_row(conn, assignment_id)
-        if not 0 <= page < a["blank_pages"]:
+        page = -1 if body.page is None else body.page
+        if page >= 0 and page >= a["blank_pages"]:
             raise HTTPException(404, "No such page")
-        if body.kind == "cover":
-            conn.execute("DELETE FROM problems WHERE assignment_id = ? AND page = ?", (assignment_id, page))
-            conn.execute("UPDATE assignments SET cover_page = ? WHERE id = ?", (page, assignment_id))
-        elif page == a["cover_page"]:
-            raise HTTPException(400, "Choose another cover page first")
-        elif body.kind == "none":
-            conn.execute("DELETE FROM problems WHERE assignment_id = ? AND page = ?", (assignment_id, page))
-        else:
-            existing = conn.execute(
-                "SELECT label, max_points FROM problems WHERE assignment_id = ? AND page = ?", (assignment_id, page)
-            ).fetchone()
-            label = (body.label or "").strip() or (existing["label"] if existing else next_label(conn, assignment_id))
-            points = body.max_points if body.max_points is not None else (
-                existing["max_points"] if existing else DEFAULT_POINTS
-            )
-            conn.execute(
-                """INSERT INTO problems (assignment_id, page, label, max_points) VALUES (?, ?, ?, ?)
-                   ON CONFLICT (assignment_id, page) DO UPDATE SET label = excluded.label,
-                   max_points = excluded.max_points""",
-                (assignment_id, page, label, points),
-            )
+        conn.execute("UPDATE assignments SET cover_page = ? WHERE id = ?", (page, assignment_id))
         return assignment_detail(conn, assignment_id)
+
+
+@app.post("/api/assignments/{assignment_id}/problems")
+def add_problem(assignment_id: int, body: ProblemIn):
+    """Add a problem to a blank page. A page takes as many as it has room for, cover included."""
+    with db.session() as conn:
+        a = assignment_row(conn, assignment_id)
+        if body.page >= a["blank_pages"]:
+            raise HTTPException(404, "No such page")
+        conn.execute(
+            "INSERT INTO problems (assignment_id, page, label, max_points, position) VALUES (?, ?, ?, ?, ?)",
+            (
+                assignment_id,
+                body.page,
+                (body.label or "").strip() or next_label(conn, assignment_id),
+                DEFAULT_POINTS if body.max_points is None else body.max_points,
+                next_position(conn, assignment_id, body.page),
+            ),
+        )
+        return assignment_detail(conn, assignment_id)
+
+
+@app.patch("/api/problems/{problem_id}")
+def update_problem(problem_id: int, body: ProblemPatch):
+    """Rename a problem, change its points, or move it to another page or place on its page."""
+    with db.session() as conn:
+        p = fetch(conn, "SELECT * FROM problems WHERE id = ?", (problem_id,))
+        a = assignment_row(conn, p["assignment_id"])
+        page = p["page"] if body.page is None else body.page
+        if page >= a["blank_pages"]:
+            raise HTTPException(404, "No such page")
+        conn.execute(
+            "UPDATE problems SET page = ?, label = ?, max_points = ? WHERE id = ?",
+            (
+                page,
+                (body.label or "").strip() or p["label"],
+                p["max_points"] if body.max_points is None else body.max_points,
+                problem_id,
+            ),
+        )
+        if body.position is not None or page != p["page"]:
+            # A problem moved to another page joins the end of it unless a place was asked for.
+            place_problem(conn, a["id"], page, problem_id, body.position if body.position is not None else 1 << 30)
+        return assignment_detail(conn, a["id"])
+
+
+@app.delete("/api/problems/{problem_id}")
+def delete_problem(problem_id: int):
+    """Remove a problem and the comments written for it, wherever they were placed."""
+    with db.session() as conn:
+        p = fetch(conn, "SELECT assignment_id FROM problems WHERE id = ?", (problem_id,))
+        conn.execute("DELETE FROM problems WHERE id = ?", (problem_id,))
+        return assignment_detail(conn, p["assignment_id"])
 
 
 # ---------------------------------------------------------------- batches
@@ -548,14 +622,15 @@ def delete_batch(batch_id: int):
 def slot_labels(conn: sqlite3.Connection, a: sqlite3.Row, b: sqlite3.Row) -> list[str]:
     """What each page slot of a test is expected to hold, from the blank page mapping."""
     labels: list[list[str]] = [[] for _ in range(b["pages_per_test"])]
-    by_page = {p["page"]: p["label"] for p in db.problems(conn, a["id"])}
+    by_page: dict[int, list[str]] = {}
+    for p in db.problems(conn, a["id"]):
+        by_page.setdefault(p["page"], []).append(f"Problem {p['label']}")
     for blank_page, offset in enumerate(json.loads(b["page_map"])):
         if not 0 <= offset < b["pages_per_test"]:
             continue
         if blank_page == a["cover_page"]:
             labels[offset].append("Cover")
-        elif blank_page in by_page:
-            labels[offset].append(f"Problem {by_page[blank_page]}")
+        labels[offset] += by_page.get(blank_page, [])
     return [", ".join(names) for names in labels]
 
 

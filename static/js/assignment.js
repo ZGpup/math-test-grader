@@ -5,8 +5,13 @@ let A = null; // assignment detail from the API
 let pending = []; // [{file, ppt}] scans chosen but not uploaded yet
 let uploading = false;
 
-const KIND_LABELS = { cover: 'Cover', problem: 'Problem', none: 'None' };
 const MODE_LABELS = { identity: 'one-to-one', odd: 'odd scan pages', custom: 'custom' };
+
+// What a blank page holds, for the mapping table and the answer key: the cover mark and every
+// problem on it. A page may be both, which is the quiz with the name on top and problems below.
+function pageRole(p, prefix = '') {
+  return [p.cover ? 'Cover' : null, ...p.problems.map((pr) => `${prefix}${pr.label}`)].filter(Boolean).join(', ');
+}
 
 // ------------------------------------------------------------------ blank test
 
@@ -22,53 +27,98 @@ function renderPages() {
   $('#blank-status').textContent = A.blank_key
     ? `${plural(A.blank_pages, 'page', 'pages')}${hasBatches ? ' (delete scans to replace)' : ''}`
     : '';
+  $('#pages-hint').textContent = A.blank_pages
+    ? 'Tick “Cover” on the page the student writes their name on — it can hold problems as well, '
+      + 'and a test needs no cover page at all. Any page takes as many problems as it has on it.'
+    : '';
   renderTotals();
   $('#pages').replaceChildren(...A.pages.map(pageCard));
 }
 
+// A page is the cover, or carries problems, or both, or neither: nothing here rules anything out.
+// The cover is only the page the name is read from and the exported score box goes on.
 function pageCard(p) {
-  const select = h('select', { onchange: (e) => setKind(p.index, e.target.value) },
-    Object.entries(KIND_LABELS).map(([k, label]) => h('option', { value: k, selected: p.kind === k }, label)));
-  const fields = h('div', { class: 'fields' }, h('span', { class: 'muted' }, `p. ${p.index + 1}`), select);
-  if (p.kind === 'problem') {
-    const label = h('input', { value: p.problem.label, autocomplete: 'off' });
-    const points = h('input', { type: 'number', min: '0', step: 'any', value: String(p.problem.max_points) });
-    const save = () => saveProblem(p.index, label, points);
-    label.addEventListener('change', save);
-    points.addEventListener('change', save);
-    fields.append(h('span', {}, 'Label'), label, h('span', {}, 'Points'), points);
-  }
-  return h('div', { class: `page-card ${p.kind}` },
+  const coverBox = h('input', {
+    type: 'checkbox', checked: p.cover, onchange: (e) => setCover(p.index, e.target.checked),
+  });
+  return h('div', { class: `page-card${p.cover ? ' cover' : ''}${p.problems.length ? '' : ' empty'}` },
     h('img', { src: pageUrl(A.blank_key, p.index, true), alt: '', onclick: () => showImage(pageUrl(A.blank_key, p.index)) }),
-    fields);
+    h('div', { class: 'fields' },
+      h('div', { class: 'head' },
+        h('span', { class: 'muted' }, `p. ${p.index + 1}`),
+        h('span', { class: 'spacer' }),
+        h('label', { class: 'check', title: 'The page the student writes their name on' }, coverBox, 'Cover')),
+      p.problems.map((pr, i) => problemRow(p, pr, i)),
+      h('button', { class: 'link add', onclick: () => addProblem(p.index) }, '+ Add problem')));
 }
 
-async function setKind(index, kind) {
-  const page = A.pages[index];
-  if (page.kind === 'problem' && page.problem.comments > 0) {
-    const ok = await confirmBox(
-      `Problem ${page.problem.label} has ${plural(page.problem.comments, 'comment', 'comments')}. Remove the problem and its comments?`,
-      'Remove');
-    if (!ok) return renderPages();
-  }
+function problemRow(page, pr, i) {
+  const label = h('input', { value: pr.label, autocomplete: 'off', title: 'Problem label' });
+  const points = h('input', { type: 'number', min: '0', step: 'any', value: String(pr.max_points), title: 'Points' });
+  const save = () => saveProblem(pr, label, points);
+  label.addEventListener('change', save);
+  points.addEventListener('change', save);
+  const move = (delta, glyph, title) => h('button', {
+    class: 'link', title, disabled: i + delta < 0 || i + delta >= page.problems.length,
+    onclick: () => moveProblem(pr, i + delta),
+  }, glyph);
+  return h('div', { class: 'prob' }, label, points,
+    h('span', { class: 'tools' },
+      page.problems.length > 1 ? move(-1, '↑', 'Move up') : null,
+      page.problems.length > 1 ? move(1, '↓', 'Move down') : null,
+      h('button', { class: 'link', title: 'Remove this problem', onclick: () => removeProblem(pr) }, '×')));
+}
+
+async function setCover(index, on) {
   try {
-    A = await PUT(`/api/assignments/${assignmentId}/pages/${index}`, { kind });
+    A = await PUT(`/api/assignments/${assignmentId}/cover`, { page: on ? index : null });
   } finally {
     render();
   }
 }
 
-async function saveProblem(index, labelInput, pointsInput) {
+async function addProblem(index) {
+  try {
+    A = await POST(`/api/assignments/${assignmentId}/problems`, { page: index });
+  } finally {
+    render();
+  }
+}
+
+async function removeProblem(pr) {
+  if (pr.comments > 0) {
+    const ok = await confirmBox(
+      `Problem ${pr.label} has ${plural(pr.comments, 'comment', 'comments')}. Remove the problem and its comments?`,
+      'Remove');
+    if (!ok) return;
+  }
+  try {
+    A = await DELETE(`/api/problems/${pr.id}`);
+  } finally {
+    render();
+  }
+}
+
+async function moveProblem(pr, position) {
+  try {
+    A = await PATCH(`/api/problems/${pr.id}`, { position });
+  } finally {
+    render();
+  }
+}
+
+async function saveProblem(pr, labelInput, pointsInput) {
   const points = parseFloat(pointsInput.value);
   if (!labelInput.value.trim() || !(points >= 0)) {
-    labelInput.value = A.pages[index].problem.label;
-    pointsInput.value = A.pages[index].problem.max_points;
+    labelInput.value = pr.label;
+    pointsInput.value = pr.max_points;
     return;
   }
   // Update data without rebuilding the cards, so focus stays where the user tabbed to.
-  A = await PUT(`/api/assignments/${assignmentId}/pages/${index}`,
-    { kind: 'problem', label: labelInput.value.trim(), max_points: points });
+  // Everything else that names the problem is redrawn, since none of it holds the caret.
+  A = await PATCH(`/api/problems/${pr.id}`, { label: labelInput.value.trim(), max_points: points });
   renderTotals();
+  renderAnswerKey();
   renderBatches();
 }
 
@@ -105,8 +155,7 @@ function renderAnswerKey() {
 // What the test has on the same page, which is where the key opens while grading that problem.
 function answers(index) {
   const p = A.pages[index];
-  if (!p) return '';
-  return p.kind === 'cover' ? 'Cover' : p.kind === 'problem' ? `Problem ${p.problem.label}` : '';
+  return p ? pageRole(p, 'Problem ') : '';
 }
 
 function keyCard(index) {
@@ -235,13 +284,12 @@ function batchBlock(b) {
 }
 
 function mappingTable(b) {
-  const pages = A.pages.filter((p) => p.kind !== 'none');
+  const pages = A.pages.filter((p) => p.cover || p.problems.length);
   const options = (current) => Array.from({ length: b.pages_per_test },
     (_, i) => h('option', { value: String(i), selected: current === i }, i + 1));
   return h('div', { class: 'map' }, h('table', { class: 'grid compact' },
     h('tr', {}, h('th', {}, 'Blank page'), pages.map((p) => h('td', {}, p.index + 1))),
-    h('tr', {}, h('th', {}, 'Problem'),
-      pages.map((p) => h('td', {}, p.kind === 'cover' ? 'Cover' : p.problem.label))),
+    h('tr', {}, h('th', {}, 'Problem'), pages.map((p) => h('td', {}, pageRole(p)))),
     h('tr', {}, h('th', {}, 'Scan page'),
       pages.map((p) => h('td', {}, h('select', {
         onchange: (e) => setMapping(b, p.index, parseInt(e.target.value, 10)),

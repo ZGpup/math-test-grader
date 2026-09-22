@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS assignments (
     name TEXT NOT NULL,
     blank_key TEXT,                        -- uploads/<key>.pdf, pages/<key>/
     blank_pages INTEGER NOT NULL DEFAULT 0,
-    cover_page INTEGER NOT NULL DEFAULT 0, -- 0-based blank page index
+    cover_page INTEGER NOT NULL DEFAULT 0, -- 0-based blank page index; -1 for no cover page
     answer_key TEXT,                       -- worked solutions, shown beside a student's work
     answer_key_pages INTEGER NOT NULL DEFAULT 0,
     anonymous INTEGER NOT NULL DEFAULT 0    -- grade without names, in scan order
@@ -35,10 +35,10 @@ CREATE TABLE IF NOT EXISTS assignments (
 CREATE TABLE IF NOT EXISTS problems (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     assignment_id INTEGER NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
-    page INTEGER NOT NULL,                 -- 0-based blank page index
+    page INTEGER NOT NULL,                 -- 0-based blank page index; a page holds any number
     label TEXT NOT NULL,
     max_points REAL NOT NULL,
-    UNIQUE (assignment_id, page)
+    position INTEGER NOT NULL DEFAULT 0    -- order within that page
 );
 CREATE TABLE IF NOT EXISTS batches (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS graded (
     PRIMARY KEY (submission_id, problem_id)
 );
 CREATE INDEX IF NOT EXISTS idx_students_course ON students(course_id);
+CREATE INDEX IF NOT EXISTS idx_problems_assignment ON problems(assignment_id);
 CREATE INDEX IF NOT EXISTS idx_submission_pages ON submission_pages(submission_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_batch ON submissions(batch_id);
 CREATE INDEX IF NOT EXISTS idx_comments_problem ON comments(problem_id);
@@ -136,6 +137,22 @@ ALTER TABLE comments_new RENAME TO comments;
 CREATE INDEX IF NOT EXISTS idx_comments_problem ON comments(problem_id);
 """
 
+PROBLEMS_REBUILD = """
+CREATE TABLE problems_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assignment_id INTEGER NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
+    page INTEGER NOT NULL,
+    label TEXT NOT NULL,
+    max_points REAL NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO problems_new (id, assignment_id, page, label, max_points, position)
+    SELECT id, assignment_id, page, label, max_points, 0 FROM problems;
+DROP TABLE problems;
+ALTER TABLE problems_new RENAME TO problems;
+CREATE INDEX IF NOT EXISTS idx_problems_assignment ON problems(assignment_id);
+"""
+
 
 def migrate(conn: sqlite3.Connection) -> None:
     """Bring a database written by an older version up to date. A new one needs nothing."""
@@ -146,6 +163,14 @@ def migrate(conn: sqlite3.Connection) -> None:
         conn.commit()
         conn.execute("PRAGMA foreign_keys = OFF")
         conn.executescript(COMMENTS_REBUILD)
+        conn.execute("PRAGMA foreign_keys = ON")
+    if "position" not in {r["name"] for r in conn.execute("PRAGMA table_info(problems)")}:
+        # Drop "UNIQUE (assignment_id, page)" so a page can hold several problems, and add the
+        # order they sit in on it. Rebuilding is the only way, and it must not cascade into the
+        # comments and graded rows that point at these problems, which keep their ids.
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.executescript(PROBLEMS_REBUILD)
         conn.execute("PRAGMA foreign_keys = ON")
     columns = {r["name"] for r in conn.execute("PRAGMA table_info(assignments)")}
     if "answer_key" not in columns:
@@ -361,8 +386,10 @@ def assign_student(conn: sqlite3.Connection, submission_id: int, student_id: int
 
 
 def problems(conn: sqlite3.Connection, assignment_id: int) -> list[dict]:
+    """Every problem of an assignment, page by page and in the order they sit on their page."""
     rows = conn.execute(
-        "SELECT id, page, label, max_points FROM problems WHERE assignment_id = ? ORDER BY page",
+        """SELECT id, page, label, max_points, position FROM problems
+           WHERE assignment_id = ? ORDER BY page, position, id""",
         (assignment_id,),
     )
     return [dict(r) for r in rows]

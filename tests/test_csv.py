@@ -29,7 +29,7 @@ def test_csv_format(client, assignment):
     s1, s2, _ = [s["id"] for s in assignment["submissions"]]
 
     # Relabel problem 4 so the header uses labels, and give it 5 points.
-    client.put(f"/api/assignments/{aid}/pages/{probs[3]['page']}", json={"kind": "problem", "label": "4a", "max_points": 5})
+    client.patch(f"/api/problems/{probs[3]['id']}", json={"label": "4a", "max_points": 5})
     place(client, s1, add_comment(client, probs[0]["id"], "a", 2.5))
     place(client, s2, add_comment(client, probs[1]["id"], "b", 12))
     place(client, s2, add_comment(client, probs[3]["id"], "c", 1))
@@ -64,7 +64,7 @@ def test_summary_statistics(client, assignment):
     s1, s2, s3 = [s["id"] for s in assignment["submissions"]]
 
     # The scores of test_csv_format: 32.5, 24 and 35 out of 35.
-    client.put(f"/api/assignments/{aid}/pages/{probs[3]['page']}", json={"kind": "problem", "label": "4a", "max_points": 5})
+    client.patch(f"/api/problems/{probs[3]['id']}", json={"label": "4a", "max_points": 5})
     place(client, s1, add_comment(client, probs[0]["id"], "a", 2.5))
     place(client, s2, add_comment(client, probs[1]["id"], "b", 12))
     place(client, s2, add_comment(client, probs[3]["id"], "c", 1))

@@ -16,7 +16,7 @@ from matplotlib.figure import Figure
 from matplotlib.font_manager import FontProperties
 from matplotlib.mathtext import MathTextParser
 
-from app import db
+from app import db, pdf
 
 TEXT_FONT = db.ROOT / "static" / "vendor" / "katex" / "fonts" / "KaTeX_Main-Regular.ttf"
 ACCENT = (0.12, 0.43, 0.82)  # --accent in static/css/style.css
@@ -362,8 +362,8 @@ def export_pdfs(conn: sqlite3.Connection, assignment_id: int) -> tuple[list[Path
             earned = sum(scores[(sub["id"], p["id"])] for p in probs)
             summary = [(p["label"], f"{fmt_num(scores[(sub['id'], p['id'])])} / {fmt_num(p['max_points'])}") for p in probs]
             summary.append(("Total", f"{fmt_num(earned)} / {fmt_num(possible)}"))
-            cover = min(sub["page_map"][a["cover_page"]], out.page_count - 1)
-            _draw_summary(out[cover], summary)
+            # With no cover page the score box goes on the first page of the test.
+            _draw_summary(out[pdf.cover_offset(sub["page_map"], a["cover_page"], out.page_count)], summary)
             out.save(path, garbage=3, deflate=True)
             out.close()
             written.append(path)

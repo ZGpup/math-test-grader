@@ -67,7 +67,8 @@ def new_assignment(client, fixtures) -> int:
     aid = client.post(f"/api/courses/{cid}/assignments", json={"name": "A"}).json()["id"]
     detail = upload(client, f"/api/assignments/{aid}/blank", fixtures["blank"])
     assert detail["blank_pages"] == 5
-    assert [p["kind"] for p in detail["pages"]] == ["cover", "problem", "problem", "problem", "problem"]
+    assert [p["cover"] for p in detail["pages"]] == [True, False, False, False, False]
+    assert [len(p["problems"]) for p in detail["pages"]] == [0, 1, 1, 1, 1]
     assert [p["label"] for p in detail["problems"]] == ["1", "2", "3", "4"]
     return aid
 
@@ -163,16 +164,16 @@ def test_a_test_split_across_two_pdfs_exports_in_one_piece(client, fixtures):
         assert "Algebra Quiz 3" in doc[2].get_text(), "the page after the cut comes from the second PDF"
 
 
-def test_page_kinds(client, fixtures):
+def test_cover_moves_and_problems_are_edited(client, fixtures):
     cid = client.post("/api/courses", json={"name": "C"}).json()["id"]
     aid = client.post(f"/api/courses/{cid}/assignments", json={"name": "A"}).json()["id"]
-    upload(client, f"/api/assignments/{aid}/blank", fixtures["blank"])
-    detail = client.put(f"/api/assignments/{aid}/pages/4", json={"kind": "none"}).json()
+    detail = upload(client, f"/api/assignments/{aid}/blank", fixtures["blank"])
+    last = detail["problems"][-1]
+    detail = client.delete(f"/api/problems/{last['id']}").json()
     assert detail["total_points"] == 30
-    detail = client.put(f"/api/assignments/{aid}/pages/1", json={"kind": "cover"}).json()
-    assert [p["kind"] for p in detail["pages"]] == ["none", "cover", "problem", "problem", "none"]
-    detail = client.put(
-        f"/api/assignments/{aid}/pages/3", json={"kind": "problem", "label": "2b", "max_points": 7.5}
-    ).json()
-    assert [(p["label"], p["max_points"]) for p in detail["problems"]] == [("2", 10), ("2b", 7.5)]
-    assert client.put(f"/api/assignments/{aid}/pages/1", json={"kind": "none"}).status_code == 400
+    detail = client.put(f"/api/assignments/{aid}/cover", json={"page": 1}).json()
+    assert [p["cover"] for p in detail["pages"]] == [False, True, False, False, False]
+    page = detail["pages"][1]
+    assert [p["label"] for p in page["problems"]] == ["1"], "the new cover page keeps its problem"
+    detail = client.patch(f"/api/problems/{detail['problems'][2]['id']}", json={"label": "2b", "max_points": 7.5}).json()
+    assert [(p["label"], p["max_points"]) for p in detail["problems"]] == [("1", 10), ("2", 10), ("2b", 7.5)]

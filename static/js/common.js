@@ -141,6 +141,14 @@ function pageSrc(s, offset, thumb = false) {
   return pageUrl(s.key, pageAt(s, offset).scan_page, thumb);
 }
 
+// Which page of a test carries the student's name: the mapped cover page, or the first page when
+// the assignment has no cover page (coverPage is -1). app/pdf.py cover_offset does the same for
+// the export.
+function coverOffset(s, coverPage) {
+  const at = coverPage >= 0 ? s.page_map[coverPage] : 0;
+  return Math.max(0, Math.min(at || 0, s.page_count - 1));
+}
+
 // Classes that turn an image the way its page was fixed on the organize screen.
 function flipClass(p) {
   return `flip${p && p.upside_down ? ' upside' : ''}${p && p.mirrored ? ' mirrored' : ''}`;

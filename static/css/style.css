@@ -135,12 +135,20 @@ form.inline { display: flex; gap: 8px; margin-top: 10px; }
 /* ------------------------------------------------------------ assignment setup */
 
 .pages { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
-.page-card { width: 176px; border: 1px solid var(--border); background: var(--bg); }
+.page-card { width: 210px; border: 1px solid var(--border); background: var(--bg); }
 .page-card.cover { border-color: var(--accent); outline: 1px solid var(--accent); }
-.page-card.none img { opacity: 0.55; }
+/* A page holding no problem at all is fine -- instructions, scratch paper -- so it is only faded. */
+.page-card.empty img { opacity: 0.55; }
 .page-card img { display: block; width: 100%; border-bottom: 1px solid var(--border); cursor: zoom-in; }
-.page-card .fields { padding: 5px 6px; display: grid; grid-template-columns: auto 1fr; gap: 4px 6px; align-items: center; font-size: 14px; }
-.page-card .fields input, .page-card .fields select { width: 100%; padding: 1px 4px; }
+.page-card .fields { padding: 5px 6px; display: grid; gap: 4px; font-size: 14px; }
+.page-card .head { display: flex; align-items: center; gap: 6px; }
+.page-card .head .check { font-size: 13px; }
+/* One row per problem on the page: label, points, and the buttons that move or remove it. */
+.page-card .prob { display: grid; grid-template-columns: minmax(0, 1fr) 52px auto; gap: 4px; align-items: center; }
+.page-card .prob input { width: 100%; padding: 1px 4px; }
+.page-card .prob .tools { display: flex; }
+.page-card .prob .tools button { padding: 0 3px; }
+.page-card .add { text-align: left; justify-self: start; }
 
 .batch { border: 1px solid var(--border); padding: 8px 10px; margin-top: 10px; }
 .batch details { margin-top: 6px; }

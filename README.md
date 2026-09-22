@@ -57,13 +57,17 @@ GRADER_DATA=~/Library/"Application Support"/MathTestGrader uv run grader
 ## Workflow
 
 1. Home: add a course, then paste the roster (one student per line, `First Last` or `Last, First`).
-2. Add an assignment, upload the blank test, and set the cover page plus each problem's label and points.
+2. Add an assignment, upload the blank test, and say what each page holds: add a problem to it for
+   every problem printed on it, with a label and points, and tick "Cover" on the page the student
+   writes their name on. A page takes as many problems as it has on it, the cover page included —
+   a quiz with a name at the top and two problems below it is one page that is all three — and a
+   test with no cover page at all is fine, its name being read off the first page.
    Optionally upload an answer key: the test with the work filled in. Any page count will do.
 3. Upload the scan with the pages per test, and check the problem-to-scan-page mapping. If the scanner
    split the job into several PDFs, add them in order: each one carries on where the last stopped.
 4. Organize pages: one column per test. Drag a page that was fed in the wrong order to its slot, turn
    the ones that came out upside down or mirrored, then press "Order is correct" to unlock the rest.
-5. Match names: click the student for each cover page.
+5. Match names: click the student for each cover page (the first page, when there is no cover).
 6. Grade: pick a problem, place rubric comments on each student's page, press Enter for the next student.
    A comment's "points off" can be negative, which adds points instead, for bonus questions.
    Tick "Anonymous grading" on the assignment to grade without the names: the tests then come up as

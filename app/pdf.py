@@ -87,6 +87,16 @@ def default_page_map(blank_pages: int, pages_per_test: int) -> list[int]:
     return [min(i, pages_per_test - 1) for i in range(blank_pages)]
 
 
+def cover_offset(page_map: list[int], cover_page: int, page_count: int) -> int:
+    """Which page of a test carries the student's name, as an offset within the test.
+
+    The mapped cover page, or the first page when the assignment has no cover page at all
+    (cover_page is -1). static/js/common.js coverOffset does the same for the screens.
+    """
+    at = page_map[cover_page] if 0 <= cover_page < len(page_map) else 0
+    return min(max(at, 0), max(0, page_count - 1))
+
+
 def mapping_mode(blank_pages: int, pages_per_test: int, page_map: list[int]) -> str:
     """'identity', 'odd', or 'custom' -- used by the UI to decide whether to show the table."""
     if pages_per_test == blank_pages and page_map == list(range(blank_pages)):

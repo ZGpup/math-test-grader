@@ -6,11 +6,12 @@ let idx = 0; // current submission
 let page = 0; // page offset within the current submission
 
 const current = () => M.submissions[idx];
-const coverOffset = (s) => s.page_map[M.cover_page];
+// A test without a cover page opens on its first page, which is where a name usually is anyway.
+const cover = (s) => coverOffset(s, M.cover_page);
 
 function show(i) {
   idx = Math.max(0, Math.min(M.submissions.length - 1, i));
-  page = coverOffset(current());
+  page = cover(current());
   render();
 }
 
@@ -64,8 +65,8 @@ function render() {
   $('#subs').replaceChildren(...subs.map((sub, i) => {
     const li = h('li', { class: i === idx ? 'current' : '', onclick: () => show(i) },
       h('img', {
-        src: pageSrc(sub, coverOffset(sub), true), alt: '', loading: 'lazy',
-        class: flipClass(pageAt(sub, coverOffset(sub))),
+        src: pageSrc(sub, cover(sub), true), alt: '', loading: 'lazy',
+        class: flipClass(pageAt(sub, cover(sub))),
       }),
       h('span', { class: sub.student_id ? '' : 'unmatched' }, `${i + 1}. `, studentName(sub) || 'Unmatched'));
     return li;
