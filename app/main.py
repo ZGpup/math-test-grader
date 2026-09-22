@@ -101,9 +101,16 @@ def batch_info(conn: sqlite3.Connection, b: sqlite3.Row, blank_pages: int) -> di
     }
 
 
+def with_key_page(probs: list[dict], a: sqlite3.Row) -> list[dict]:
+    """Add `key_at`, the answer key page each problem opens at, beside the stored `key_page`."""
+    for p in probs:
+        p["key_at"] = pdf.answer_key_page(p["key_page"], p["page"], a["answer_key_pages"])
+    return probs
+
+
 def assignment_detail(conn: sqlite3.Connection, assignment_id: int) -> dict:
     a = assignment_row(conn, assignment_id)
-    probs = db.problems(conn, assignment_id)
+    probs = with_key_page(db.problems(conn, assignment_id), a)
     # A page carries any number of problems, and the cover page may carry them too: a quiz with the
     # name on top and two problems below it is one page that is the cover and holds both problems.
     by_page: dict[int, list[dict]] = {}
@@ -150,6 +157,12 @@ def next_position(conn: sqlite3.Connection, assignment_id: int, page: int) -> in
         (assignment_id, page),
     ).fetchone()
     return position
+
+
+def check_key_page(a: sqlite3.Row, key_page: int | None) -> None:
+    """-1 (follow the test) is always allowed; a real page has to be one the key has."""
+    if key_page is not None and key_page >= a["answer_key_pages"]:
+        raise HTTPException(404, "No such answer key page")
 
 
 def place_problem(conn: sqlite3.Connection, assignment_id: int, page: int, problem_id: int, index: int) -> None:
@@ -201,6 +214,7 @@ class ProblemIn(BaseModel):
     page: int = Field(ge=0)
     label: str | None = None
     max_points: float | None = Field(None, ge=0)
+    key_page: int = Field(-1, ge=-1)  # -1: follow the page the problem is on in the test
 
 
 class ProblemPatch(BaseModel):
@@ -208,6 +222,7 @@ class ProblemPatch(BaseModel):
     position: int | None = Field(None, ge=0)
     label: str | None = None
     max_points: float | None = Field(None, ge=0)
+    key_page: int | None = Field(None, ge=-1)  # -1 puts it back to following the test
 
 
 class BatchPatch(BaseModel):
@@ -411,7 +426,8 @@ def upload_blank(assignment_id: int, file: UploadFile = File(...)):
 
 @app.post("/api/assignments/{assignment_id}/answer_key")
 def upload_answer_key(assignment_id: int, file: UploadFile = File(...)):
-    """Upload the worked answer key. Any page count: grading shows one of its pages at a time."""
+    """Upload the worked answer key. Any page count, laid out however it likes: each problem says
+    which of its pages to open at."""
     with db.session() as conn:
         a = assignment_row(conn, assignment_id)
     key = f"k{assignment_id}_{secrets.token_hex(4)}"
@@ -424,6 +440,9 @@ def upload_answer_key(assignment_id: int, file: UploadFile = File(...)):
         conn.execute(
             "UPDATE assignments SET answer_key = ?, answer_key_pages = ? WHERE id = ?", (key, count, assignment_id)
         )
+        # The pages picked out were pages of the key being replaced, which is a different document,
+        # so they go back to following the test rather than pointing into a key that has gone.
+        conn.execute("UPDATE problems SET key_page = -1 WHERE assignment_id = ?", (assignment_id,))
         detail = assignment_detail(conn, assignment_id)
     remove_files(a["answer_key"])
     return detail
@@ -434,6 +453,7 @@ def delete_answer_key(assignment_id: int):
     with db.session() as conn:
         a = assignment_row(conn, assignment_id)
         conn.execute("UPDATE assignments SET answer_key = NULL, answer_key_pages = 0 WHERE id = ?", (assignment_id,))
+        conn.execute("UPDATE problems SET key_page = -1 WHERE assignment_id = ?", (assignment_id,))
         detail = assignment_detail(conn, assignment_id)
     remove_files(a["answer_key"])
     return detail
@@ -458,14 +478,17 @@ def add_problem(assignment_id: int, body: ProblemIn):
         a = assignment_row(conn, assignment_id)
         if body.page >= a["blank_pages"]:
             raise HTTPException(404, "No such page")
+        check_key_page(a, body.key_page)
         conn.execute(
-            "INSERT INTO problems (assignment_id, page, label, max_points, position) VALUES (?, ?, ?, ?, ?)",
+            """INSERT INTO problems (assignment_id, page, label, max_points, position, key_page)
+               VALUES (?, ?, ?, ?, ?, ?)""",
             (
                 assignment_id,
                 body.page,
                 (body.label or "").strip() or next_label(conn, assignment_id),
                 DEFAULT_POINTS if body.max_points is None else body.max_points,
                 next_position(conn, assignment_id, body.page),
+                body.key_page,
             ),
         )
         return assignment_detail(conn, assignment_id)
@@ -473,19 +496,22 @@ def add_problem(assignment_id: int, body: ProblemIn):
 
 @app.patch("/api/problems/{problem_id}")
 def update_problem(problem_id: int, body: ProblemPatch):
-    """Rename a problem, change its points, or move it to another page or place on its page."""
+    """Rename a problem, change its points, move it to another page or place on its page, or say
+    which answer key page its answers are on."""
     with db.session() as conn:
         p = fetch(conn, "SELECT * FROM problems WHERE id = ?", (problem_id,))
         a = assignment_row(conn, p["assignment_id"])
         page = p["page"] if body.page is None else body.page
         if page >= a["blank_pages"]:
             raise HTTPException(404, "No such page")
+        check_key_page(a, body.key_page)
         conn.execute(
-            "UPDATE problems SET page = ?, label = ?, max_points = ? WHERE id = ?",
+            "UPDATE problems SET page = ?, label = ?, max_points = ?, key_page = ? WHERE id = ?",
             (
                 page,
                 (body.label or "").strip() or p["label"],
                 p["max_points"] if body.max_points is None else body.max_points,
+                p["key_page"] if body.key_page is None else body.key_page,
                 problem_id,
             ),
         )
@@ -733,7 +759,7 @@ def grading_state(assignment_id: int):
     """Everything the grading screen needs in one request."""
     with db.session() as conn:
         a = assignment_row(conn, assignment_id)
-        probs = db.problems(conn, assignment_id)
+        probs = with_key_page(db.problems(conn, assignment_id), a)
         for p in probs:
             p["comments"] = comments_for(conn, p["id"])
         annotations = conn.execute(

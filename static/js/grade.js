@@ -57,17 +57,23 @@ const hasKey = () => !!G.answer_key && G.answer_key_pages > 0;
 
 function buildKeyPages() {
   if (!hasKey()) return;
-  $('#key-pages').replaceChildren(...Array.from({ length: G.answer_key_pages }, (_, i) =>
-    h('div', { class: 'sheet key-sheet' },
+  $('#key-pages').replaceChildren(...Array.from({ length: G.answer_key_pages }, (_, i) => {
+    const answers = G.problems.filter((p) => p.key_at === i).map((p) => p.label);
+    return h('div', { class: 'sheet key-sheet' },
       h('img', { src: pageUrl(G.answer_key, i), alt: '', draggable: false }),
-      h('div', { class: 'key-cap' }, `p. ${i + 1}`))));
+      h('div', { class: 'key-cap' }, `p. ${i + 1}`,
+        answers.length
+          ? h('span', { class: 'muted' }, ` · ${answers.length > 1 ? 'Problems' : 'Problem'} ${answers.join(', ')}`)
+          : null));
+  }));
 }
 
-// A key usually runs page for page with the blank test, so a problem's answers are on the key page
-// sitting where the problem does, clamped to the key's last page. That is where the column scrolls
-// to when the key opens and when the problem changes; scrolling it by hand is left alone.
+// Where a problem's answers start: the key page chosen for it on the assignment screen, or the one
+// sitting where the problem sits in the test (`key_at`, from app/pdf.py answer_key_page). That is
+// where the column scrolls to when the key opens and when the problem changes; scrolling it by
+// hand is left alone, so an answer running on over the next page is read by carrying on down.
 function scrollKeyToProblem() {
-  const target = $('#key-pages').children[clamp(problem().page, 0, G.answer_key_pages - 1)];
+  const target = $('#key-pages').children[problem().key_at];
   if (target) target.scrollIntoView({ block: 'start' });
 }
 

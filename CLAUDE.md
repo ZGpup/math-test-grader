@@ -32,7 +32,8 @@ uv run pytest
 2. Add an assignment, upload the blank test, and say what each page holds: one problem per problem
    printed on it, each with a label and points, plus "Cover" on the page carrying the name. A page
    takes any number of problems, the cover included, and a test may have no cover page at all.
-   Optionally upload an answer key.
+   Optionally upload an answer key, and under its pages say which key page each problem is
+   answered on if the key is not laid out like the test.
 3. Upload scan PDFs with the pages per test, and check the problem-to-scan-page mapping.
 4. Organize pages: one column per test. Drag a misfed page to its slot, turn the ones that came out
    upside down or mirrored, then press "Order is correct".
@@ -79,7 +80,10 @@ Answer key
 - `answer_key_pages` is stored because the whole key is laid out at once. `db.migrate` fills it in for a key uploaded before it existed by counting that key's rendered page images, so an old key does not come back as a key of no pages.
 - A new blank test clears the answer key, the way it clears the problems, because the key answered the old test.
 - While grading, "Answer key" (`a`) opens the key as a third column beside the student's work, holding every key page and scrolling on its own, so reading the key never moves the student's page. Annotation sizes are container units of their own sheet, so the boxes stay true to the page at half the width and exported PDFs still match. The column is only a picture: comments are placed on the student's page as usual, open or closed.
-- The column scrolls to the key page sitting where the problem sits in the test, clamped to the key's last page, when it opens and when the problem changes. Changing student leaves it alone, and so does scrolling it yourself. A key of another shape is therefore read by scrolling, with no mapping to set anywhere.
+- Each problem says which key page its answers start on (`problems.key_page`, `-1` for "follow the test"). A key is often laid out like the test but need not be: two problems printed on one page of the test can have their answers on two key pages, because the worked solution to the first one filled the page. `pdf.answer_key_page` resolves the stored value — the page chosen, else the key page sitting where the problem sits in the test, always clamped to the key's last page, `None` when there is no key — and the API sends the answer as `key_at` beside the stored `key_page`, so the screens never work the rule out themselves.
+- Only the page the answers *start* on is stored. The column holds every page and scrolls, so an answer running onto the page after it is read by carrying on down; nothing has to describe a range.
+- The column scrolls to that page when it opens and when the problem changes. Changing student leaves it alone, and so does scrolling it yourself.
+- The mapping is set on the assignment screen, under the key's pages: one select per problem, defaulting to "Follows the test (p. N)". Each key page's caption says which problems open at it, on that screen and in the grading column, so a mapping is checked by reading the pages rather than the table. Uploading a new key (or removing one) puts every problem back to following the test: the pages were picked out of a document that is gone, and a stale number would point into the new one.
 - The key's images are fetched when the grading screen loads, though the column starts closed: a page with no image has no height, and scrolling to one of them would land nowhere.
 
 Scans

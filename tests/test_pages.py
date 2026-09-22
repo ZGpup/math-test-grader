@@ -203,3 +203,21 @@ def test_an_older_database_keeps_its_work_and_gains_the_freedom(client, assignme
 
     detail = client.post(f"/api/assignments/{aid}/problems", json={"page": 1, "label": "1b"}).json()
     assert roles(detail)[1] == "1, 1b"
+
+
+def test_a_database_from_before_the_key_could_be_mapped(client, assignment):
+    """Only the column is missing there, so it is added in place rather than rebuilt."""
+    aid = assignment["id"]
+    p1 = assignment["problems"][0]["id"]
+    s1 = assignment["submissions"][0]["id"]
+    place(client, s1, add_comment(client, p1, "Sign error", 2))
+    with db.session() as conn:
+        conn.execute("ALTER TABLE problems DROP COLUMN key_page")
+        assert "key_page" not in {r["name"] for r in conn.execute("PRAGMA table_info(problems)")}
+    db._initialized.clear()  # so the next connection migrates again
+
+    detail = client.get(f"/api/assignments/{aid}").json()
+    assert labels(detail) == ["1", "2", "3", "4"]
+    assert [p["id"] for p in detail["problems"]][0] == p1
+    assert [p["key_page"] for p in detail["problems"]] == [-1, -1, -1, -1], "following the test, as before"
+    assert client.get(f"/api/assignments/{aid}/results").json()["rows"][0]["cells"][0]["points"] == 8

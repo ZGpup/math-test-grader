@@ -150,6 +150,12 @@ form.inline { display: flex; gap: 8px; margin-top: 10px; }
 .page-card .prob .tools button { padding: 0 3px; }
 .page-card .add { text-align: left; justify-self: start; }
 
+/* Which answer key page each problem opens at; shaped like the scan mapping below it. */
+.key-map { margin-top: 10px; }
+.key-map summary { cursor: pointer; color: var(--muted); }
+.key-map .map { margin-top: 6px; overflow-x: auto; }
+.key-map select { padding: 1px 4px; }
+
 .batch { border: 1px solid var(--border); padding: 8px 10px; margin-top: 10px; }
 .batch details { margin-top: 6px; }
 .batch summary { cursor: pointer; color: var(--muted); }

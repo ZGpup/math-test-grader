@@ -62,7 +62,10 @@ GRADER_DATA=~/Library/"Application Support"/MathTestGrader uv run grader
    writes their name on. A page takes as many problems as it has on it, the cover page included —
    a quiz with a name at the top and two problems below it is one page that is all three — and a
    test with no cover page at all is fine, its name being read off the first page.
-   Optionally upload an answer key: the test with the work filled in. Any page count will do.
+   Optionally upload an answer key: the test with the work filled in. Any page count and any
+   layout will do — under its pages, each problem picks the key page its answers start on, which
+   is the test's own page unless you say otherwise. So when a worked solution fills a page and
+   pushes the next answer onto the one after it, point that problem at the page it really is on.
 3. Upload the scan with the pages per test, and check the problem-to-scan-page mapping. If the scanner
    split the job into several PDFs, add them in order: each one carries on where the last stopped.
 4. Organize pages: one column per test. Drag a page that was fed in the wrong order to its slot, turn
@@ -72,8 +75,9 @@ GRADER_DATA=~/Library/"Application Support"/MathTestGrader uv run grader
    A comment's "points off" can be negative, which adds points instead, for bonus questions.
    Tick "Anonymous grading" on the assignment to grade without the names: the tests then come up as
    "Test 1", "Test 2"… in scan order. Matching, the results and the exports still use the names.
-   "Answer key" opens the key in a column beside the student's work, scrolled to the page for that
-   problem. The column scrolls on its own, so any key can be read without moving the student's page.
+   "Answer key" opens the key in a column beside the student's work, scrolled to that problem's
+   page. The column scrolls on its own, so an answer running onto the next page is read by carrying
+   on down, and the student's page never moves.
 7. Results: review the table with the average, median, high and low below it, download the CSV,
    export annotated PDFs.
 

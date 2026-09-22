@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS problems (
     page INTEGER NOT NULL,                 -- 0-based blank page index; a page holds any number
     label TEXT NOT NULL,
     max_points REAL NOT NULL,
-    position INTEGER NOT NULL DEFAULT 0    -- order within that page
+    position INTEGER NOT NULL DEFAULT 0,   -- order within that page
+    key_page INTEGER NOT NULL DEFAULT -1   -- answer key page; -1 follows the page in the test
 );
 CREATE TABLE IF NOT EXISTS batches (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,10 +145,11 @@ CREATE TABLE problems_new (
     page INTEGER NOT NULL,
     label TEXT NOT NULL,
     max_points REAL NOT NULL,
-    position INTEGER NOT NULL DEFAULT 0
+    position INTEGER NOT NULL DEFAULT 0,
+    key_page INTEGER NOT NULL DEFAULT -1
 );
-INSERT INTO problems_new (id, assignment_id, page, label, max_points, position)
-    SELECT id, assignment_id, page, label, max_points, 0 FROM problems;
+INSERT INTO problems_new (id, assignment_id, page, label, max_points, position, key_page)
+    SELECT id, assignment_id, page, label, max_points, 0, -1 FROM problems;
 DROP TABLE problems;
 ALTER TABLE problems_new RENAME TO problems;
 CREATE INDEX IF NOT EXISTS idx_problems_assignment ON problems(assignment_id);
@@ -164,7 +166,8 @@ def migrate(conn: sqlite3.Connection) -> None:
         conn.execute("PRAGMA foreign_keys = OFF")
         conn.executescript(COMMENTS_REBUILD)
         conn.execute("PRAGMA foreign_keys = ON")
-    if "position" not in {r["name"] for r in conn.execute("PRAGMA table_info(problems)")}:
+    problem_columns = {r["name"] for r in conn.execute("PRAGMA table_info(problems)")}
+    if "position" not in problem_columns:
         # Drop "UNIQUE (assignment_id, page)" so a page can hold several problems, and add the
         # order they sit in on it. Rebuilding is the only way, and it must not cascade into the
         # comments and graded rows that point at these problems, which keep their ids.
@@ -172,6 +175,10 @@ def migrate(conn: sqlite3.Connection) -> None:
         conn.execute("PRAGMA foreign_keys = OFF")
         conn.executescript(PROBLEMS_REBUILD)
         conn.execute("PRAGMA foreign_keys = ON")
+    elif "key_page" not in problem_columns:
+        # A problem written before the answer key could be mapped follows the test, which is how
+        # its key was read until now.
+        conn.execute("ALTER TABLE problems ADD COLUMN key_page INTEGER NOT NULL DEFAULT -1")
     columns = {r["name"] for r in conn.execute("PRAGMA table_info(assignments)")}
     if "answer_key" not in columns:
         conn.execute("ALTER TABLE assignments ADD COLUMN answer_key TEXT")
@@ -388,7 +395,7 @@ def assign_student(conn: sqlite3.Connection, submission_id: int, student_id: int
 def problems(conn: sqlite3.Connection, assignment_id: int) -> list[dict]:
     """Every problem of an assignment, page by page and in the order they sit on their page."""
     rows = conn.execute(
-        """SELECT id, page, label, max_points, position FROM problems
+        """SELECT id, page, label, max_points, position, key_page FROM problems
            WHERE assignment_id = ? ORDER BY page, position, id""",
         (assignment_id,),
     )

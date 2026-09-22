@@ -90,6 +90,103 @@ def test_grading_state_carries_the_answer_key(client, assignment, fixtures):
     assert (state["answer_key"], state["answer_key_pages"]) == (key, 5)
 
 
+# ---------------------------------------------------------------- which key page a problem opens at
+
+
+def key_pages(detail: dict) -> list[tuple[str, int, int | None]]:
+    return [(p["label"], p["key_page"], p["key_at"]) for p in detail["problems"]]
+
+
+def test_a_key_page_is_chosen_per_problem(client, fixtures):
+    """The key that needed a second page for the second problem: p. 1 and p. 2 of the test are
+    one page, but their answers are on key pages 1 and 2."""
+    aid = new_assignment(client, fixtures)
+    detail = client.get(f"/api/assignments/{aid}").json()
+    for p in detail["problems"][2:]:  # keep problems 1 and 2
+        detail = client.delete(f"/api/problems/{p['id']}").json()
+    one, two = detail["problems"]
+    detail = client.patch(f"/api/problems/{two['id']}", json={"page": one["page"]}).json()
+    assert [p["page"] for p in detail["problems"]] == [1, 1], "both printed on one page of the test"
+
+    detail = upload(client, f"/api/assignments/{aid}/answer_key", fixtures["key"])
+    assert key_pages(detail) == [("1", -1, 1), ("2", -1, 1)], "following the test, both open at p. 2"
+
+    detail = client.patch(f"/api/problems/{two['id']}", json={"key_page": 2}).json()
+    assert key_pages(detail) == [("1", -1, 1), ("2", 2, 2)], "the second answer is a page further on"
+    assert key_pages(client.get(f"/api/assignments/{aid}/grading").json()) == [("1", -1, 1), ("2", 2, 2)]
+
+    # Back to following the test.
+    detail = client.patch(f"/api/problems/{two['id']}", json={"key_page": -1}).json()
+    assert key_pages(detail) == [("1", -1, 1), ("2", -1, 1)]
+
+
+def test_a_chosen_key_page_survives_everything_else_about_the_problem(client, fixtures):
+    aid = new_assignment(client, fixtures)
+    upload(client, f"/api/assignments/{aid}/answer_key", fixtures["key"])
+    pid = client.get(f"/api/assignments/{aid}").json()["problems"][0]["id"]
+    client.patch(f"/api/problems/{pid}", json={"key_page": 4})
+    detail = client.patch(f"/api/problems/{pid}", json={"label": "1a", "max_points": 3, "page": 2}).json()
+    moved = next(p for p in detail["problems"] if p["id"] == pid)
+    assert (moved["label"], moved["page"], moved["key_page"], moved["key_at"]) == ("1a", 2, 4, 4), (
+        "renaming and moving it leaves its key page alone"
+    )
+
+
+def test_without_a_key_a_problem_opens_at_nothing(client, fixtures):
+    aid = new_assignment(client, fixtures)
+    assert key_pages(client.get(f"/api/assignments/{aid}").json())[0] == ("1", -1, None)
+    pid = client.get(f"/api/assignments/{aid}").json()["problems"][0]["id"]
+    assert client.patch(f"/api/problems/{pid}", json={"key_page": 0}).status_code == 404
+
+
+def test_a_key_page_must_be_one_the_key_has(client, fixtures):
+    aid = new_assignment(client, fixtures)
+    upload(client, f"/api/assignments/{aid}/answer_key", fixtures["key"])  # 5 pages
+    pid = client.get(f"/api/assignments/{aid}").json()["problems"][0]["id"]
+    assert client.patch(f"/api/problems/{pid}", json={"key_page": 5}).status_code == 404
+    assert client.patch(f"/api/problems/{pid}", json={"key_page": -2}).status_code == 422
+    assert client.patch(f"/api/problems/{pid}", json={"key_page": 4}).status_code == 200
+    assert client.post(f"/api/assignments/{aid}/problems", json={"page": 0, "key_page": 9}).status_code == 404
+
+
+def test_a_short_key_clamps_to_its_last_page(client, fixtures, tmp_path):
+    """A one-page key for a five-page test: every problem opens at the page there is."""
+    import pymupdf
+
+    aid = new_assignment(client, fixtures)
+    one_page = tmp_path / "one_page_key.pdf"
+    with pymupdf.open(fixtures["key"]) as src, pymupdf.open() as out:
+        out.insert_pdf(src, from_page=0, to_page=0)
+        out.save(one_page)
+    detail = upload(client, f"/api/assignments/{aid}/answer_key", one_page)
+    assert detail["answer_key_pages"] == 1
+    assert [p["key_at"] for p in detail["problems"]] == [0, 0, 0, 0]
+
+
+def test_a_new_key_puts_the_pages_back_to_following_the_test(client, fixtures):
+    """The pages were picked out of the key being replaced, which is a different document."""
+    aid = new_assignment(client, fixtures)
+    upload(client, f"/api/assignments/{aid}/answer_key", fixtures["key"])
+    pid = client.get(f"/api/assignments/{aid}").json()["problems"][0]["id"]
+    assert client.patch(f"/api/problems/{pid}", json={"key_page": 3}).json()["problems"][0]["key_page"] == 3
+    detail = upload(client, f"/api/assignments/{aid}/answer_key", fixtures["key"])
+    assert [p["key_page"] for p in detail["problems"]] == [-1, -1, -1, -1]
+
+    client.patch(f"/api/problems/{pid}", json={"key_page": 3})
+    detail = client.delete(f"/api/assignments/{aid}/answer_key").json()
+    assert [p["key_page"] for p in detail["problems"]] == [-1, -1, -1, -1]
+
+
+def test_resolving_the_key_page():
+    from app import pdf
+
+    assert pdf.answer_key_page(-1, 2, 5) == 2, "no page chosen: the one sitting where the problem is"
+    assert pdf.answer_key_page(4, 2, 5) == 4, "the page chosen for it"
+    assert pdf.answer_key_page(-1, 9, 5) == 4, "clamped to the key's last page"
+    assert pdf.answer_key_page(-1, 0, 0) is None, "no key, nothing to open"
+    assert pdf.answer_key_page(3, 0, 0) is None
+
+
 def test_deleting_the_course_removes_the_answer_key_files(client, fixtures):
     aid = new_assignment(client, fixtures)
     detail = upload(client, f"/api/assignments/{aid}/answer_key", fixtures["key"])

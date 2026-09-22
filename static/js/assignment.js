@@ -7,10 +7,10 @@ let uploading = false;
 
 const MODE_LABELS = { identity: 'one-to-one', odd: 'odd scan pages', custom: 'custom' };
 
-// What a blank page holds, for the mapping table and the answer key: the cover mark and every
-// problem on it. A page may be both, which is the quiz with the name on top and problems below.
-function pageRole(p, prefix = '') {
-  return [p.cover ? 'Cover' : null, ...p.problems.map((pr) => `${prefix}${pr.label}`)].filter(Boolean).join(', ');
+// What a blank page holds, for the scan mapping table: the cover mark and every problem on it.
+// A page may be both, which is the quiz with the name on top and problems below.
+function pageRole(p) {
+  return [p.cover ? 'Cover' : null, ...p.problems.map((pr) => pr.label)].filter(Boolean).join(', ');
 }
 
 // ------------------------------------------------------------------ blank test
@@ -138,11 +138,15 @@ $('#blank-file').addEventListener('change', async (e) => {
 
 // ------------------------------------------------------------------ answer key
 
-// Any page count is fine: the whole key scrolls beside the student's work while grading, and it
-// opens on the page sitting where the problem sits in the test. A key whose pages are gone counts
-// as no key, so nothing ever reports a page count it doesn't have.
+// Any page count and any layout: the whole key scrolls beside the student's work while grading,
+// and each problem says which key page to open at. A key whose pages are gone counts as no key,
+// so nothing ever reports a page count it doesn't have.
+function hasAnswerKey() {
+  return !!A.answer_key && A.answer_key_pages > 0;
+}
+
 function renderAnswerKey() {
-  const hasKey = A.answer_key && A.answer_key_pages > 0;
+  const hasKey = hasAnswerKey();
   $('#key-button').firstChild.textContent = hasKey ? 'Replace PDF' : 'Upload PDF';
   $('#key-delete').hidden = !hasKey;
   $('#key-status').textContent = hasKey
@@ -150,24 +154,57 @@ function renderAnswerKey() {
     : "Optional. Shown beside the student's work while grading";
   $('#key-pages').replaceChildren(
     ...(hasKey ? Array.from({ length: A.answer_key_pages }, (_, i) => keyCard(i)) : []));
+  $('#key-map').replaceChildren(...(hasKey && A.problems.length ? [keyMapping()] : []));
 }
 
-// What the test has on the same page, which is where the key opens while grading that problem.
+// The problems whose answers start on this key page.
 function answers(index) {
-  const p = A.pages[index];
-  return p ? pageRole(p, 'Problem ') : '';
+  return A.problems.filter((p) => p.key_at === index).map((p) => p.label);
 }
 
 function keyCard(index) {
-  const label = answers(index);
+  const labels = answers(index);
+  const text = labels.length ? `${labels.length > 1 ? 'Problems' : 'Problem'} ${labels.join(', ')}` : '';
   return h('div', { class: 'page-card' },
     h('img', {
       src: pageUrl(A.answer_key, index, true), alt: '',
       onclick: () => showImage(pageUrl(A.answer_key, index)),
     }),
     h('div', { class: 'fields' },
-      h('span', { class: 'muted' }, `p. ${index + 1}`),
-      h('span', { class: label ? '' : 'muted' }, label || '—')));
+      h('div', { class: 'head' },
+        h('span', { class: 'muted' }, `p. ${index + 1}`),
+        h('span', { class: 'spacer' }),
+        h('span', { class: text ? '' : 'muted' }, text || '—'))));
+}
+
+// Which key page each problem opens at. A key laid out page for page with the test needs nothing
+// here; one whose answers ran onto further pages is set straight problem by problem.
+function keyMapping() {
+  const custom = A.problems.some((p) => p.key_page >= 0);
+  // Where "follows the test" lands, which is the rule in app/pdf.py answer_key_page. It is shown
+  // even for a problem pointed elsewhere, so the option says what going back to it would do.
+  const follows = (p) => Math.min(Math.max(p.page, 0), A.answer_key_pages - 1);
+  const options = (p) => [
+    h('option', { value: '-1', selected: p.key_page < 0 }, `Follows the test (p. ${follows(p) + 1})`),
+    ...Array.from({ length: A.answer_key_pages },
+      (_, i) => h('option', { value: String(i), selected: p.key_page === i }, `p. ${i + 1}`)),
+  ];
+  return h('details', { open: custom },
+    h('summary', {}, `Answer pages: ${custom ? 'chosen per problem' : 'following the test'}`),
+    h('div', { class: 'map' }, h('table', { class: 'grid compact' },
+      h('tr', {}, h('th', {}, 'Problem'), A.problems.map((p) => h('td', {}, p.label))),
+      h('tr', {}, h('th', {}, 'Key page'),
+        A.problems.map((p) => h('td', {}, h('select', {
+          onchange: (e) => setKeyPage(p, parseInt(e.target.value, 10)),
+        }, options(p))))))));
+}
+
+async function setKeyPage(pr, key_page) {
+  try {
+    A = await PATCH(`/api/problems/${pr.id}`, { key_page });
+  } finally {
+    render();
+  }
 }
 
 $('#key-file').addEventListener('change', async (e) => {

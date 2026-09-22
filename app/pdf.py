@@ -97,6 +97,21 @@ def cover_offset(page_map: list[int], cover_page: int, page_count: int) -> int:
     return min(max(at, 0), max(0, page_count - 1))
 
 
+def answer_key_page(key_page: int, page: int, answer_key_pages: int) -> int | None:
+    """Which page of the answer key a problem's answers start on.
+
+    The page chosen for that problem, or -- when none was chosen (-1) -- the key page sitting
+    where the problem sits in the test, which is what a key laid out page for page wants. Always
+    clamped to the key's last page, and None when there is no key to open.
+
+    Only the page the answers start on: the key column holds every page and scrolls, so an answer
+    running over the page after it is read by carrying on down.
+    """
+    if answer_key_pages <= 0:
+        return None
+    return min(max(key_page if key_page >= 0 else page, 0), answer_key_pages - 1)
+
+
 def mapping_mode(blank_pages: int, pages_per_test: int, page_map: list[int]) -> str:
     """'identity', 'odd', or 'custom' -- used by the UI to decide whether to show the table."""
     if pages_per_test == blank_pages and page_map == list(range(blank_pages)):
